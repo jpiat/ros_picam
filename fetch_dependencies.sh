@@ -1,7 +1,7 @@
 #!/bin/sh
 
-#sudo apt-get update
-#sudo apt-get install gcc g++ libx11-dev libxt-dev libxext-dev libgraphicsmagick1-dev libcv-dev
+sudo apt-get update
+sudo apt-get install gcc g++ libx11-dev libxt-dev libxext-dev libgraphicsmagick1-dev libcv-dev
 
 if [ ! -d dependencies ]; then
 	mkdir dependencies
@@ -35,7 +35,7 @@ fi
 
 cd userland
 USERLAND_PWD=${PWD}
-#./buildme
+./buildme
 cd ..
 
 echo ${USERLAND_PWD}
