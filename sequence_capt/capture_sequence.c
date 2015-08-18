@@ -23,6 +23,8 @@ char path_base [128];
 int p[] = {CV_IMWRITE_JPEG_QUALITY, 100, 0};
 
 
+#define MAX_SEQ_LENGTH 300
+
 #define MAX_SPEED 80
 #define NB_MOVES 4
 unsigned char  robot_moves [][3] ={
@@ -32,7 +34,7 @@ unsigned char  robot_moves [][3] ={
 {MAX_SPEED, MAX_SPEED, 200}
 };
 
-void writePGM(const char *filename, IplImage * img)
+void writePGM(const char *filename, IplImage * img, char *  comment)
 {
     FILE *pgmFile;
     int i, j;
@@ -42,23 +44,24 @@ void writePGM(const char *filename, IplImage * img)
         perror("cannot open file to write");
         exit(EXIT_FAILURE);
     }
-    fprintf(pgmFile, "P5 ");
+    fprintf(pgmFile, "P5 \n");
     //TODO : insert data as comments ... Maybe use Json file format
-    fprintf(pgmFile, "%d %d ", img->width, img->height);
-    fprintf(pgmFile, "%d ", 255);
-    for (i = 0; i < img->height; ++i){
-            for (j = 0; j < img->width; ++j) {
-                lo = img->imageData[(i*img->width)+j];
-                fputc(lo, pgmFile);
-            }
+    if(comment != NULL){
+    	fprintf(pgmFile, "#%s \n", comment);
     }
+    fprintf(pgmFile, "%d %d \n", img->width, img->height);
+    fprintf(pgmFile, "%d \n", 255);
+    fwrite(img->imageData, 1, img->height*img->width, pgmFile);
     fclose(pgmFile);
 }
 
 int main(int argc, char *argv[]){
 
+	char *  frames_buffer ;
+	unsigned int frames_buffer_index = 0;
 	int nb_frames = 300 ;
 	int frame_index = 0, move_index = 0;
+	IplImage * dummy_image ;
 	if(argc > 1) nb_frames = atoi(argv[1]);
 	if(argc > 2){
 		sprintf(path_base, "%s", argv[2]);
@@ -82,8 +85,15 @@ int main(int argc, char *argv[]){
 	config->bitrate=0;	// zero: leave as default
 	config->framerate=30;
 	config->monochrome=1;
-	
-	
+
+	frames_buffer = malloc(640*480*nb_frames);
+	if(frames_buffer == NULL){
+		printf("Cannot allocate %d bytes \n", 640*480*nb_frames);
+		exit(-1);
+	}
+
+	dummy_image = cvCreateImage(cvSize(640, 480), IPL_DEPTH_8U, 1);
+
 	properties->hflip = 1 ;
 	properties->vflip = 1 ;
 	properties -> sharpness = 0 ;
@@ -108,7 +118,7 @@ int main(int argc, char *argv[]){
 	free(config);
 
 	printf("Wait stable sensor \n");
-	for(i = 0 ; i < 50 ; ){
+	for(i = 0 ; i < 10 ; ){
 		int success = 0 ;
                 success = raspiCamCvGrab(capture);
                 if(success){
@@ -118,24 +128,40 @@ int main(int argc, char *argv[]){
 	}
 	printf("Start move \n");
 	i = 0 ;
+	frames_buffer_index = 0 ;
+	printf("Start capture \n");
 	while(i < nb_frames){
 		int success = 0 ;
 		success = raspiCamCvGrab(capture);
-		motor_run(FORWARD, &mot4);
-		motor_run(FORWARD, &mot3);
+		//motor_run(FORWARD, &mot4);
+		//motor_run(FORWARD, &mot3);
 		if(success){
-				sprintf(path, path_fmt, path_base, i);
+				//sprintf(path, path_fmt, path_base, i);
 				IplImage* image = raspiCamCvRetrieve(capture);
-				cvSaveImage(path, image, NULL);
+				memcpy(&frames_buffer[frames_buffer_index], image->imageData,	640*480);
+				frames_buffer_index += (640*480) ;
+				//writePGM(path, image, "This is a test !");
+				//cvSaveImage(path, image, NULL);
 				i ++ ;
 				if(i > robot_moves[move_index][2] && move_index < NB_MOVES){
 					move_index ++ ;
 					printf("mode index %d \n", move_index);
-					motor_set_speed(robot_moves[move_index][0], &mot4);
-                                	motor_set_speed(robot_moves[move_index][1], &mot3);
+					//motor_set_speed(robot_moves[move_index][0], &mot4);
+                                	//motor_set_speed(robot_moves[move_index][1], &mot3);
 				}
 		}
 	}
+	printf("Capture done \n");
+	i = 0 ;
+	frames_buffer_index = 0 ;
+	while(i < nb_frames){
+				dummy_image->imageData = &frames_buffer[frames_buffer_index];
+                                sprintf(path, path_fmt, path_base, i);
+                                frames_buffer_index += (640*480) ;
+                                writePGM(path, dummy_image, "This is a test !");
+                                //cvSaveImage(path, image, NULL);
+                                i ++ ;
+        }
 	motor_close(&mot3);
         motor_close(&mot4);
 	raspiCamCvReleaseCapture(&capture);
