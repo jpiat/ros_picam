@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <math.h>
+#include <time.h>
 #include "RaspiCamCV.h"
 #include "Adafruit_Motor_HAT.h"
 
@@ -62,6 +63,8 @@ int main(int argc, char *argv[]){
 	int nb_frames = 300 ;
 	int frame_index = 0, move_index = 0;
 	IplImage * dummy_image ;
+	struct timespec tstart={0,0}, tend={0,0};
+	double compute_time = 0.0 ;
 	if(argc > 1) nb_frames = atoi(argv[1]);
 	if(argc > 2){
 		sprintf(path_base, "%s", argv[2]);
@@ -130,13 +133,13 @@ int main(int argc, char *argv[]){
 	i = 0 ;
 	frames_buffer_index = 0 ;
 	printf("Start capture \n");
+	motor_run(FORWARD, &mot4);
+        motor_run(FORWARD, &mot3);
+	clock_gettime(CLOCK_MONOTONIC, &tstart);
 	while(i < nb_frames){
 		int success = 0 ;
 		success = raspiCamCvGrab(capture);
-		//motor_run(FORWARD, &mot4);
-		//motor_run(FORWARD, &mot3);
 		if(success){
-				//sprintf(path, path_fmt, path_base, i);
 				IplImage* image = raspiCamCvRetrieve(capture);
 				memcpy(&frames_buffer[frames_buffer_index], image->imageData,	640*480);
 				frames_buffer_index += (640*480) ;
@@ -145,13 +148,19 @@ int main(int argc, char *argv[]){
 				i ++ ;
 				if(i > robot_moves[move_index][2] && move_index < NB_MOVES){
 					move_index ++ ;
-					printf("mode index %d \n", move_index);
-					//motor_set_speed(robot_moves[move_index][0], &mot4);
-                                	//motor_set_speed(robot_moves[move_index][1], &mot3);
+					printf("move index %d \n", move_index);
+					motor_set_speed(robot_moves[move_index][0], &mot4);
+                                	motor_set_speed(robot_moves[move_index][1], &mot3);
 				}
 		}
 	}
+	clock_gettime(CLOCK_MONOTONIC, &tend);
 	printf("Capture done \n");
+	compute_time =  ((double)tend.tv_sec + 1.0e-9*tend.tv_nsec) - 
+           ((double)tstart.tv_sec + 1.0e-9*tstart.tv_nsec);
+	printf("Capture took %.5f seconds\n", compute_time);
+	printf("Actual frame-rate was %f \n", nb_frames/compute_time);
+	
 	i = 0 ;
 	frames_buffer_index = 0 ;
 	while(i < nb_frames){
