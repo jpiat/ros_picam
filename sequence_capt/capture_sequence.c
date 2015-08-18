@@ -164,6 +164,7 @@ int main(int argc, char *argv[]){
         }
 	motor_close(&mot3);
         motor_close(&mot4);
+	free(frames_buffer);
 	raspiCamCvReleaseCapture(&capture);
 	return 0;
 }
