@@ -19,7 +19,7 @@
 
 char path [128];
 char * path_fmt = "%s/image_%04d.pgm";
-char * path_base [128];
+char path_base [128];
 int p[] = {CV_IMWRITE_JPEG_QUALITY, 100, 0};
 
 
