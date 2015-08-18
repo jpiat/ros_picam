@@ -24,8 +24,6 @@ int p[] = {CV_IMWRITE_JPEG_QUALITY, 100, 0};
 
 
 #define MAX_SPEED 80
-
-
 #define NB_MOVES 4
 unsigned char  robot_moves [][3] ={
 {0, 0, 50},
@@ -33,6 +31,29 @@ unsigned char  robot_moves [][3] ={
 {MAX_SPEED, MAX_SPEED/4, 100},
 {MAX_SPEED, MAX_SPEED, 200}
 };
+
+void writePGM(const char *filename, IplImage * img)
+{
+    FILE *pgmFile;
+    int i, j;
+    int hi, lo;
+    pgmFile = fopen(filename, "wb");
+    if (pgmFile == NULL) {
+        perror("cannot open file to write");
+        exit(EXIT_FAILURE);
+    }
+    fprintf(pgmFile, "P5 ");
+    //TODO : insert data as comments ... Maybe use Json file format
+    fprintf(pgmFile, "%d %d ", img->width, img->height);
+    fprintf(pgmFile, "%d ", 255);
+    for (i = 0; i < img->height; ++i){
+            for (j = 0; j < img->width; ++j) {
+                lo = img->imageData[(i*img->width)+j];
+                fputc(lo, pgmFile);
+            }
+    }
+    fclose(pgmFile);
+}
 
 int main(int argc, char *argv[]){
 
