@@ -106,7 +106,9 @@ void writePGM(const char *filename, IplImage * img, char *  comment)
 }
 
 int main(int argc, char *argv[]){
-
+	//TODO : multi_thread capture and save
+	/*HANDLE acq_thread, save_thread;
+	DWORD acq_thread_id, save_thread_id;*/
 	int nb_frames = 300 ;
 	int frame_index = 0, move_index = 0;
 	IplImage * dummy_image ;
@@ -198,12 +200,18 @@ int main(int argc, char *argv[]){
 	printf("Capture took %.5f seconds\n", compute_time);
 	printf("Actual frame-rate was %f \n", nb_frames/compute_time);
 	i = 0 ;
+	clock_gettime(CLOCK_MONOTONIC, &tstart);
 	while(pop_frame(dummy_image, &my_frame_buffer) >= 0){
                                 sprintf(path, path_fmt, path_base, i);
                                 writePGM(path, dummy_image, "This is a test !");
                                 //cvSaveImage(path, image, NULL);
                                 i ++ ;
         }
+	clock_gettime(CLOCK_MONOTONIC, &tend);
+        printf("Saving done \n");
+        compute_time =  ((double)tend.tv_sec + 1.0e-9*tend.tv_nsec) - 
+           ((double)tstart.tv_sec + 1.0e-9*tstart.tv_nsec);
+        printf("Saving took %.5f seconds\n", compute_time);
 	motor_close(&mot3);
         motor_close(&mot4);
 	free_frame_buffer(&my_frame_buffer);
