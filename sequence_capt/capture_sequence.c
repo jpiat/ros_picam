@@ -187,7 +187,7 @@ int main(int argc, char *argv[]){
 		success = raspiCamCvGrab(capture);
 		if(success){
 				IplImage* image = raspiCamCvRetrieve(capture);
-				push_frame(image, &my_frame_buffer);
+				if(push_frame(image, &my_frame_buffer) < 0) printf("lost frame %d ! \n", i);;
 				i ++ ;
 		}
 	}
