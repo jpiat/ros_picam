@@ -27,7 +27,7 @@ int p[] = {CV_IMWRITE_JPEG_QUALITY, 100, 0};
 
 
 #define MAX_SEQ_LENGTH 300
-
+#define BUFFER_LENGTH 800
 
 struct frame_buffer{
 	char * buffer ;
@@ -116,12 +116,12 @@ void save_thread_func(void * lpParam){
                                 writePGM(path, dummy_image, "This is a test !");
                                 //printf("Saving %s \n", path);
 				//usleep(5000);
-                                //cvSaveImage(path, image, NULL);
+                                //cvSaveImage(path, dummy_image, NULL);
                                 i ++ ;
-				usleep(120);
+				usleep(100);
         		}
 		}else{
-			usleep(120);
+			usleep(100);
 		}
 	}
 	printf("End Save \n");
@@ -171,7 +171,7 @@ int main(int argc, char *argv[]){
 	config->framerate=30;
 	config->monochrome=1;
 
-	if(init_frame_buffer(&my_frame_buffer,nb_frames/8, 640*480) < 0){
+	if(init_frame_buffer(&my_frame_buffer, BUFFER_LENGTH, 640*480) < 0){
 		printf("Cannot allocate %d bytes \n", 640*480*nb_frames);
 		exit(-1);
 	}
