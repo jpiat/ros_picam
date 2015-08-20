@@ -14,8 +14,10 @@
 #include <math.h>
 #include <time.h>
 #include "RaspiCamCV.h"
-#include "Adafruit_Motor_HAT.h"
+#include <pthread.h>
 
+typedef int DWORD;
+typedef pthread_t HANDLE;
 
 
 char path [128];
@@ -26,14 +28,6 @@ int p[] = {CV_IMWRITE_JPEG_QUALITY, 100, 0};
 
 #define MAX_SEQ_LENGTH 300
 
-#define MAX_SPEED 80
-#define NB_MOVES 4
-unsigned char  robot_moves [][3] ={
-{0, 0, 50},
-{MAX_SPEED, MAX_SPEED, 50},
-{MAX_SPEED, MAX_SPEED/4, 100},
-{MAX_SPEED, MAX_SPEED, 200}
-};
 
 struct frame_buffer{
 	char * buffer ;
@@ -45,6 +39,9 @@ struct frame_buffer{
 };
 
 struct frame_buffer my_frame_buffer ;
+int thread_alive = 0 ;
+unsigned int nb_frames ;
+RaspiCamCvCapture * capture ;
 
 int push_frame(IplImage * frame, struct frame_buffer * pBuf){
 	if(pBuf->nb_frames_availables >= pBuf->max_frames) return -1 ;
@@ -102,33 +99,69 @@ void writePGM(const char *filename, IplImage * img, char *  comment)
     fprintf(pgmFile, "%d %d \n", img->width, img->height);
     fprintf(pgmFile, "%d \n", 255);
     fwrite(img->imageData, 1, img->height*img->width, pgmFile);
+    fflush(pgmFile);
     fclose(pgmFile);
 }
 
-int main(int argc, char *argv[]){
-	//TODO : multi_thread capture and save
-	/*HANDLE acq_thread, save_thread;
-	DWORD acq_thread_id, save_thread_id;*/
-	int nb_frames = 300 ;
-	int frame_index = 0, move_index = 0;
-	IplImage * dummy_image ;
-	struct timespec tstart={0,0}, tend={0,0};
+void save_thread_func(void * lpParam){
+ 	IplImage * dummy_image ;
+	int i = 0 ;
+	dummy_image = cvCreateImage(cvSize(640, 480), IPL_DEPTH_8U, 1);
+	printf("Start Save ! \n");
+	while(thread_alive || my_frame_buffer.nb_frames_availables > 0){
+		if(my_frame_buffer.nb_frames_availables > 0){
+			if(pop_frame(dummy_image, &my_frame_buffer) >= 0){
+				//printf("One frame \n");
+				sprintf(path, path_fmt, path_base, i);
+                                writePGM(path, dummy_image, "This is a test !");
+                                //printf("Saving %s \n", path);
+				//usleep(5000);
+                                //cvSaveImage(path, image, NULL);
+                                i ++ ;
+				usleep(120);
+        		}
+		}else{
+			usleep(120);
+		}
+	}
+	printf("End Save \n");
+}
+
+void acq_thread_func(void * lpParam){
+	int i = 0 ;
+    	struct timespec tstart={0,0}, tend={0,0};
 	double compute_time = 0.0 ;
+	printf("Start Capture !\n");
+	clock_gettime(CLOCK_MONOTONIC, &tstart);
+	while(i < nb_frames){
+                int success = 0 ;
+                success = raspiCamCvGrab(capture);
+                if(success){
+                                IplImage* image = raspiCamCvRetrieve(capture);
+                                if(push_frame(image, &my_frame_buffer) < 0) printf("lost frame %d ! \n", i);;
+                                i ++ ;
+				usleep(10);
+                }
+        }
+        clock_gettime(CLOCK_MONOTONIC, &tend);
+        printf("Capture done \n");
+        compute_time =  ((double)tend.tv_sec + 1.0e-9*tend.tv_nsec) - 
+           ((double)tstart.tv_sec + 1.0e-9*tstart.tv_nsec);
+        printf("Capture took %.5f seconds\n", compute_time);
+        printf("Actual frame-rate was %f \n", nb_frames/compute_time);
+        raspiCamCvReleaseCapture(&capture);
+}
+
+int main(int argc, char *argv[]){
+	HANDLE acq_thread, save_thread;
+	DWORD acq_thread_id, save_thread_id;
+	int frame_index = 0 ;
 	if(argc > 1) nb_frames = atoi(argv[1]);
 	if(argc > 2){
 		sprintf(path_base, "%s", argv[2]);
 	}else{
        		sprintf(path_base, "./");
 	}
-	struct motor mot3 ;
-        struct motor mot4 ;
-        motor_init(&mot3, 3);
-        motor_init(&mot4, 4);
-
-        motor_run(RELEASE, &mot3);
-        motor_run(RELEASE, &mot4);
-	motor_set_speed(0, &mot3);
-	motor_set_speed(0, &mot4);
 
 	RASPIVID_CONFIG * config = (RASPIVID_CONFIG*)malloc(sizeof(RASPIVID_CONFIG));
 	RASPIVID_PROPERTIES * properties = (RASPIVID_PROPERTIES*)malloc(sizeof(RASPIVID_PROPERTIES));
@@ -138,13 +171,12 @@ int main(int argc, char *argv[]){
 	config->framerate=30;
 	config->monochrome=1;
 
-	if(init_frame_buffer(&my_frame_buffer,nb_frames, 640*480) < 0){
+	if(init_frame_buffer(&my_frame_buffer,nb_frames/8, 640*480) < 0){
 		printf("Cannot allocate %d bytes \n", 640*480*nb_frames);
 		exit(-1);
 	}
 	
 
-	dummy_image = cvCreateImage(cvSize(640, 480), IPL_DEPTH_8U, 1);
 
 	properties->hflip = 1 ;
 	properties->vflip = 1 ;
@@ -157,15 +189,13 @@ int main(int argc, char *argv[]){
 	int opt;
 	int i = 0, j = 0 ;
 	int init = 0 ;
-
-	int motor_speed = 0 ;
 	/*
 	Could also use hard coded defaults method: raspiCamCvCreateCameraCapture(0)
 	*/
 	//RaspiCamCvCapture * capture = (RaspiCamCvCapture *) raspiCamCvCreateCameraCapture2(0, config); 
 	
 	printf("Init sensor \n");
-	RaspiCamCvCapture * capture = (RaspiCamCvCapture *) raspiCamCvCreateCameraCapture3(0, config, properties, 1); 
+	capture = (RaspiCamCvCapture *) raspiCamCvCreateCameraCapture3(0, config, properties, 1); 
 
 	free(config);
 
@@ -178,43 +208,12 @@ int main(int argc, char *argv[]){
                 		i ++ ;
 		}
 	}
-	printf("Start move \n");
-	i = 0 ;
-	printf("Start capture \n");
-	motor_run(FORWARD, &mot4);
-        motor_run(FORWARD, &mot3);
-	clock_gettime(CLOCK_MONOTONIC, &tstart);
-	while(i < nb_frames){
-		int success = 0 ;
-		success = raspiCamCvGrab(capture);
-		if(success){
-				IplImage* image = raspiCamCvRetrieve(capture);
-				if(push_frame(image, &my_frame_buffer) < 0) printf("lost frame %d ! \n", i);;
-				i ++ ;
-		}
-	}
-	clock_gettime(CLOCK_MONOTONIC, &tend);
-	printf("Capture done \n");
-	compute_time =  ((double)tend.tv_sec + 1.0e-9*tend.tv_nsec) - 
-           ((double)tstart.tv_sec + 1.0e-9*tstart.tv_nsec);
-	printf("Capture took %.5f seconds\n", compute_time);
-	printf("Actual frame-rate was %f \n", nb_frames/compute_time);
-	i = 0 ;
-	clock_gettime(CLOCK_MONOTONIC, &tstart);
-	while(pop_frame(dummy_image, &my_frame_buffer) >= 0){
-                                sprintf(path, path_fmt, path_base, i);
-                                writePGM(path, dummy_image, "This is a test !");
-                                //cvSaveImage(path, image, NULL);
-                                i ++ ;
-        }
-	clock_gettime(CLOCK_MONOTONIC, &tend);
-        printf("Saving done \n");
-        compute_time =  ((double)tend.tv_sec + 1.0e-9*tend.tv_nsec) - 
-           ((double)tstart.tv_sec + 1.0e-9*tstart.tv_nsec);
-        printf("Saving took %.5f seconds\n", compute_time);
-	motor_close(&mot3);
-        motor_close(&mot4);
+	thread_alive = 1 ;
+	acq_thread_id = pthread_create(&acq_thread, NULL, &acq_thread_func, NULL);
+	save_thread_id = pthread_create(&save_thread, NULL, &save_thread_func, NULL);
+	pthread_join(acq_thread, NULL );
+	thread_alive = 0 ;
+	pthread_join(save_thread, NULL );
 	free_frame_buffer(&my_frame_buffer);
-	raspiCamCvReleaseCapture(&capture);
 	return 0;
 }
