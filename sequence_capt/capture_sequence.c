@@ -35,6 +35,55 @@ unsigned char  robot_moves [][3] ={
 {MAX_SPEED, MAX_SPEED, 200}
 };
 
+struct frame_buffer{
+	char * buffer ;
+	unsigned int write_index ;
+	unsigned int read_index ;
+	unsigned int nb_frames_availables;
+	unsigned int frame_size ;
+	unsigned int max_frames ;
+};
+
+struct frame_buffer my_frame_buffer ;
+
+int push_frame(IplImage * frame, struct frame_buffer * pBuf){
+	if(pBuf->nb_frames_availables >= pBuf->max_frames) return -1 ;
+	memcpy(&(pBuf->buffer[pBuf->write_index]), frame->imageData, pBuf->frame_size);
+	pBuf->write_index +=  pBuf->frame_size ;
+	if(pBuf->write_index >= (pBuf->max_frames * pBuf->frame_size)){
+		pBuf->write_index = 0 ;
+	}
+	pBuf->nb_frames_availables += 1 ;
+	return 0 ;
+}
+
+int pop_frame(IplImage * frame, struct frame_buffer * pBuf){
+	if(pBuf->nb_frames_availables <= 0) return -1 ;
+	memcpy(frame->imageData, &(pBuf->buffer[pBuf->read_index]), pBuf->frame_size);
+	pBuf->read_index +=  pBuf->frame_size ;
+	if(pBuf->read_index >= (pBuf->max_frames * pBuf->frame_size)){
+		pBuf->read_index = 0 ;
+	}
+	pBuf->nb_frames_availables -= 1 ;
+	return 0 ;
+
+}
+
+int init_frame_buffer(struct frame_buffer * pBuf, unsigned int nb_frames, unsigned int frame_size){
+	pBuf -> max_frames = nb_frames ;
+	pBuf -> frame_size = frame_size;
+	pBuf -> buffer = malloc(nb_frames*(pBuf -> frame_size));
+	if(pBuf -> buffer == NULL) return -1 ;
+	pBuf -> write_index = 0 ;
+	pBuf -> read_index = 0 ;
+	pBuf -> nb_frames_availables = 0 ;
+	return 0 ;
+}
+
+void free_frame_buffer(struct frame_buffer * pBuf){
+	free(pBuf -> buffer);
+}
+
 void writePGM(const char *filename, IplImage * img, char *  comment)
 {
     FILE *pgmFile;
@@ -58,8 +107,6 @@ void writePGM(const char *filename, IplImage * img, char *  comment)
 
 int main(int argc, char *argv[]){
 
-	char *  frames_buffer ;
-	unsigned int frames_buffer_index = 0;
 	int nb_frames = 300 ;
 	int frame_index = 0, move_index = 0;
 	IplImage * dummy_image ;
@@ -89,11 +136,11 @@ int main(int argc, char *argv[]){
 	config->framerate=30;
 	config->monochrome=1;
 
-	frames_buffer = malloc(640*480*nb_frames);
-	if(frames_buffer == NULL){
+	if(init_frame_buffer(&my_frame_buffer,nb_frames, 640*480) < 0){
 		printf("Cannot allocate %d bytes \n", 640*480*nb_frames);
 		exit(-1);
 	}
+	
 
 	dummy_image = cvCreateImage(cvSize(640, 480), IPL_DEPTH_8U, 1);
 
@@ -131,7 +178,6 @@ int main(int argc, char *argv[]){
 	}
 	printf("Start move \n");
 	i = 0 ;
-	frames_buffer_index = 0 ;
 	printf("Start capture \n");
 	motor_run(FORWARD, &mot4);
         motor_run(FORWARD, &mot3);
@@ -141,17 +187,8 @@ int main(int argc, char *argv[]){
 		success = raspiCamCvGrab(capture);
 		if(success){
 				IplImage* image = raspiCamCvRetrieve(capture);
-				memcpy(&frames_buffer[frames_buffer_index], image->imageData,	640*480);
-				frames_buffer_index += (640*480) ;
-				//writePGM(path, image, "This is a test !");
-				//cvSaveImage(path, image, NULL);
+				push_frame(image, &my_frame_buffer);
 				i ++ ;
-				if(i > robot_moves[move_index][2] && move_index < NB_MOVES){
-					move_index ++ ;
-					printf("move index %d \n", move_index);
-					motor_set_speed(robot_moves[move_index][0], &mot4);
-                                	motor_set_speed(robot_moves[move_index][1], &mot3);
-				}
 		}
 	}
 	clock_gettime(CLOCK_MONOTONIC, &tend);
@@ -160,20 +197,16 @@ int main(int argc, char *argv[]){
            ((double)tstart.tv_sec + 1.0e-9*tstart.tv_nsec);
 	printf("Capture took %.5f seconds\n", compute_time);
 	printf("Actual frame-rate was %f \n", nb_frames/compute_time);
-	
 	i = 0 ;
-	frames_buffer_index = 0 ;
-	while(i < nb_frames){
-				dummy_image->imageData = &frames_buffer[frames_buffer_index];
+	while(pop_frame(dummy_image, &my_frame_buffer) >= 0){
                                 sprintf(path, path_fmt, path_base, i);
-                                frames_buffer_index += (640*480) ;
                                 writePGM(path, dummy_image, "This is a test !");
                                 //cvSaveImage(path, image, NULL);
                                 i ++ ;
         }
 	motor_close(&mot3);
         motor_close(&mot4);
-	free(frames_buffer);
+	free_frame_buffer(&my_frame_buffer);
 	raspiCamCvReleaseCapture(&capture);
 	return 0;
 }
