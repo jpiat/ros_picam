@@ -28,6 +28,8 @@ int p[] = {CV_IMWRITE_JPEG_QUALITY, 100, 0};
 
 #define MAX_SEQ_LENGTH 300
 #define BUFFER_LENGTH 800
+#define WRITE_DELAY_US 50
+
 
 struct frame_buffer{
 	char * buffer ;
@@ -96,10 +98,9 @@ void writePGM(const char *filename, IplImage * img, char *  comment)
     if(comment != NULL){
     	fprintf(pgmFile, "#%s \n", comment);
     }
-    fprintf(pgmFile, "%d %d \n", img->width, img->height);
-    fprintf(pgmFile, "%d \n", 255);
+    fprintf(pgmFile, "%d %d \n%d \n", img->width, img->height, 255);
     fwrite(img->imageData, 1, img->height*img->width, pgmFile);
-    fflush(pgmFile);
+    //fflush(pgmFile);
     fclose(pgmFile);
 }
 
@@ -118,11 +119,9 @@ void save_thread_func(void * lpParam){
 				//usleep(5000);
                                 //cvSaveImage(path, dummy_image, NULL);
                                 i ++ ;
-				usleep(100);
         		}
-		}else{
-			usleep(100);
 		}
+		usleep(WRITE_DELAY_US);
 	}
 	printf("End Save \n");
 }
@@ -140,7 +139,7 @@ void acq_thread_func(void * lpParam){
                                 IplImage* image = raspiCamCvRetrieve(capture);
                                 if(push_frame(image, &my_frame_buffer) < 0) printf("lost frame %d ! \n", i);;
                                 i ++ ;
-				usleep(10);
+				usleep(1000);
                 }
         }
         clock_gettime(CLOCK_MONOTONIC, &tend);
