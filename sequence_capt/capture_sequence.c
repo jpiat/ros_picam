@@ -24,16 +24,38 @@ char path_base [128];
 int p[] = {CV_IMWRITE_JPEG_QUALITY, 100, 0};
 
 
-#define MAX_SEQ_LENGTH 300
-
-#define MAX_SPEED 80
-#define NB_MOVES 4
-unsigned char  robot_moves [][3] ={
-{0, 0, 50},
-{MAX_SPEED, MAX_SPEED, 50},
-{MAX_SPEED, MAX_SPEED/4, 100},
-{MAX_SPEED, MAX_SPEED, 200}
+struct frame_buffer{
+	char * buffer ;
+	unsigned int write_index ;
+	unsigned int read_index ;
+	unsigned int nb_frames_availables;
+	unsigned int frame_size ;
+	unsigned int max_frames ;
 };
+
+
+int push_frame(IplImage * frame, struct frame_buffer * pBuf){
+	if(pBuf->nb_frames_availables >= pBuf->max_frames) return -1 ;
+	memcpy(&(pBuf->buffer[pBuf->write_index], frame->imageData, pBuf->frame_size);
+	pBuf->write_index +=  pBuf->frame_size ;
+	if(pBuf->write_index >= (pBuf->max_frames * pBuf->frame_size)){
+		pBuf->write_index = 0 ;
+	}
+	pBuf->nb_frames_availables += 1 ;
+	return 0 ;
+}
+
+void pop_frame(IplImage * frame, struct frame_buffer * pBuf){
+if(pBuf->nb_frames_availables >= pBuf->max_frames) return -1 ;
+	memcpy(&(pBuf->buffer[pBuf->write_index], frame->imageData, pBuf->frame_size);
+	pBuf->write_index +=  pBuf->frame_size ;
+	if(pBuf->write_index >= (pBuf->max_frames * pBuf->frame_size)){
+		pBuf->write_index = 0 ;
+	}
+	pBuf->nb_frames_availables += 1 ;
+	return 0 ;
+
+}
 
 void writePGM(const char *filename, IplImage * img, char *  comment)
 {
@@ -57,9 +79,6 @@ void writePGM(const char *filename, IplImage * img, char *  comment)
 }
 
 int main(int argc, char *argv[]){
-
-	char *  frames_buffer ;
-	unsigned int frames_buffer_index = 0;
 	int nb_frames = 300 ;
 	int frame_index = 0, move_index = 0;
 	IplImage * dummy_image ;
@@ -71,15 +90,6 @@ int main(int argc, char *argv[]){
 	}else{
        		sprintf(path_base, "./");
 	}
-	struct motor mot3 ;
-        struct motor mot4 ;
-        motor_init(&mot3, 3);
-        motor_init(&mot4, 4);
-
-        motor_run(RELEASE, &mot3);
-        motor_run(RELEASE, &mot4);
-	motor_set_speed(0, &mot3);
-	motor_set_speed(0, &mot4);
 
 	RASPIVID_CONFIG * config = (RASPIVID_CONFIG*)malloc(sizeof(RASPIVID_CONFIG));
 	RASPIVID_PROPERTIES * properties = (RASPIVID_PROPERTIES*)malloc(sizeof(RASPIVID_PROPERTIES));
@@ -108,8 +118,6 @@ int main(int argc, char *argv[]){
 	int opt;
 	int i = 0, j = 0 ;
 	int init = 0 ;
-
-	int motor_speed = 0 ;
 	/*
 	Could also use hard coded defaults method: raspiCamCvCreateCameraCapture(0)
 	*/
@@ -133,8 +141,6 @@ int main(int argc, char *argv[]){
 	i = 0 ;
 	frames_buffer_index = 0 ;
 	printf("Start capture \n");
-	motor_run(FORWARD, &mot4);
-        motor_run(FORWARD, &mot3);
 	clock_gettime(CLOCK_MONOTONIC, &tstart);
 	while(i < nb_frames){
 		int success = 0 ;
@@ -143,15 +149,7 @@ int main(int argc, char *argv[]){
 				IplImage* image = raspiCamCvRetrieve(capture);
 				memcpy(&frames_buffer[frames_buffer_index], image->imageData,	640*480);
 				frames_buffer_index += (640*480) ;
-				//writePGM(path, image, "This is a test !");
-				//cvSaveImage(path, image, NULL);
 				i ++ ;
-				if(i > robot_moves[move_index][2] && move_index < NB_MOVES){
-					move_index ++ ;
-					printf("move index %d \n", move_index);
-					motor_set_speed(robot_moves[move_index][0], &mot4);
-                                	motor_set_speed(robot_moves[move_index][1], &mot3);
-				}
 		}
 	}
 	clock_gettime(CLOCK_MONOTONIC, &tend);
@@ -171,8 +169,6 @@ int main(int argc, char *argv[]){
                                 //cvSaveImage(path, image, NULL);
                                 i ++ ;
         }
-	motor_close(&mot3);
-        motor_close(&mot4);
 	free(frames_buffer);
 	raspiCamCvReleaseCapture(&capture);
 	return 0;
