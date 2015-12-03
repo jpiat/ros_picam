@@ -109,17 +109,27 @@ void writePGM(const char *filename, IplImage * img, char *  comment)
 }
 
 void save_thread_func(void * lpParam){
+	char line_buffer[128];
  	IplImage * dummy_image ;
+	File * tsFile  ;
 	int i = 0 ;
 	float timestamp ;
+	sprintf(line_buffer, "%s/images.time", path_base);
+	tsFile = fopen(line_buffer, "w");
+	if (tsFile == NULL) {
+		perror("cannot open file to write");
+		return ;
+	}
 	dummy_image = cvCreateImage(cvSize(640, 480), IPL_DEPTH_8U, 1);
 	printf("Start Save ! \n");
 	while(thread_alive || my_frame_buffer.nb_frames_availables > 0){
 		if(my_frame_buffer.nb_frames_availables > 0){
 			if(pop_frame(dummy_image, &timestamp, &my_frame_buffer) >= 0){
 				//printf("One frame \n");
+				string_size = sprintf(line_buffer, "%f\n", timestamp);//printing timestamp to file
+				fwrite(line_buffer, 1, string_size, tsFile);
 				sprintf(path, path_fmt, path_base, i);
-                                writePGM(path, dummy_image, "This is a test !");
+                                writePGM(path, dummy_image, "");
                                 //printf("Saving %s \n", path);
 				//usleep(5000);
                                 //cvSaveImage(path, dummy_image, NULL);
@@ -128,6 +138,7 @@ void save_thread_func(void * lpParam){
 		}
 		usleep(WRITE_DELAY_US);
 	}
+	close(tsFile);
 	printf("End Save \n");
 }
 
@@ -202,7 +213,7 @@ void acq_imu_thread_func(void * lpParam){
 				}else{
 					string_size = sprintf(line_buffer, "%f \n");
 				}
-				fwrite(buffer, 1, string_size, imuFile);
+				fwrite(line_buffer, 1, string_size, imuFile);
 			}
 			//add save to file
 		}
