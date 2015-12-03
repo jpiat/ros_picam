@@ -47,9 +47,10 @@ int thread_alive = 0 ;
 unsigned int nb_frames ;
 RaspiCamCvCapture * capture ;
 
-int push_frame(IplImage * frame, struct frame_buffer * pBuf){
+int push_frame(IplImage * frame, float timestamp, struct frame_buffer * pBuf){
 	if(pBuf->nb_frames_availables >= pBuf->max_frames) return -1 ;
-	memcpy(&(pBuf->buffer[pBuf->write_index]), frame->imageData, pBuf->frame_size);
+	memcpy(&(pBuf->buffer[pBuf->write_index]), frame->imageData, sizeof(float)); //pushing timestamp
+	memcpy(&(pBuf->buffer[pBuf->write_index+sizeof(float)]), frame->imageData, (pBuf->frame_size - sizeof(float)));//pushing image
 	pBuf->write_index +=  pBuf->frame_size ;
 	if(pBuf->write_index >= (pBuf->max_frames * pBuf->frame_size)){
 		pBuf->write_index = 0 ;
@@ -58,9 +59,10 @@ int push_frame(IplImage * frame, struct frame_buffer * pBuf){
 	return 0 ;
 }
 
-int pop_frame(IplImage * frame, struct frame_buffer * pBuf){
+int pop_frame(IplImage * frame, float * timestamp, struct frame_buffer * pBuf){
 	if(pBuf->nb_frames_availables <= 0) return -1 ;
-	memcpy(frame->imageData, &(pBuf->buffer[pBuf->read_index]), pBuf->frame_size);
+	memcpy(timestamp, &(pBuf->buffer[pBuf->read_index]), sizeof(float));
+	memcpy(frame->imageData, &(pBuf->buffer[pBuf->read_index+sizeof(float)]), (pBuf->frame_size - sizeof(float)));
 	pBuf->read_index +=  pBuf->frame_size ;
 	if(pBuf->read_index >= (pBuf->max_frames * pBuf->frame_size)){
 		pBuf->read_index = 0 ;
@@ -109,11 +111,12 @@ void writePGM(const char *filename, IplImage * img, char *  comment)
 void save_thread_func(void * lpParam){
  	IplImage * dummy_image ;
 	int i = 0 ;
+	float timestamp ;
 	dummy_image = cvCreateImage(cvSize(640, 480), IPL_DEPTH_8U, 1);
 	printf("Start Save ! \n");
 	while(thread_alive || my_frame_buffer.nb_frames_availables > 0){
 		if(my_frame_buffer.nb_frames_availables > 0){
-			if(pop_frame(dummy_image, &my_frame_buffer) >= 0){
+			if(pop_frame(dummy_image, &timestamp, &my_frame_buffer) >= 0){
 				//printf("One frame \n");
 				sprintf(path, path_fmt, path_base, i);
                                 writePGM(path, dummy_image, "This is a test !");
@@ -130,8 +133,9 @@ void save_thread_func(void * lpParam){
 
 void acq_image_thread_func(void * lpParam){
 	int i = 0 ;
-    	struct timespec tstart={0,0}, tend={0,0};
+    	struct timespec tstart={0,0}, tend={0,0}, tcurr;
 	double compute_time = 0.0 ;
+	float compute_time_f ;
 	printf("Start Capture !\n");
 	clock_gettime(CLOCK_MONOTONIC, &tstart);
 	while(i < nb_frames){
@@ -139,7 +143,10 @@ void acq_image_thread_func(void * lpParam){
                 success = raspiCamCvGrab(capture);
                 if(success){
                                 IplImage* image = raspiCamCvRetrieve(capture);
-                                if(push_frame(image, &my_frame_buffer) < 0) printf("lost frame %d ! \n", i);;
+				clock_gettime(CLOCK_MONOTONIC, &tcurr);
+				compute_time =  ((double)tcurr.tv_sec + 1.0e-9*tcurr.tv_nsec);
+				compute_time_f = (float) compute_time ;
+                                if(push_frame(image,compute_time_f, &my_frame_buffer) < 0) printf("lost frame %d ! \n", i);;
                                 i ++ ;
 				usleep(1000);
                 }
@@ -155,23 +162,31 @@ void acq_image_thread_func(void * lpParam){
 
 
 void acq_imu_thread_func(void * lpParam){
+	char line_buffer[128] ;
+	FILE *imuFile;
 	int i = 0 ;
 	int i2c_fd ;
 	int read_status = 0 ;
 	float time_acc_gyro [7] ;
-    	struct timespec tcur={0,0};
+	struct timespec tcur={0,0};
 	double compute_time = 0.0 ;
 	float compute_time_f ;
 	i2c_fd = open("/dev/i2c-1", O_RDWR);
-	printf("Start Capture IMU !\n");
+	sprintf(line_buffer, "%s/IMU.log", path_base);
+	imuFile = fopen(line_buffer, "w");
+	if (imuFile == NULL) {
+		perror("cannot open file to write");
+		return ;
+	}
 	if(L3GD20_begin(i2c_fd, 0, L3GD20_ADDRESS)== 0){
-		printf("cannot detect gyro \n");
+		printf("cannot detect gyro at 0x%x\n", L3GD20_ADDRESS);
 		return ;
 	}
 	if(LSM303_Acc_begin(i2c_fd, LSM303_ADDRESS_ACCEL) == 0){
-		printf("Cannot detect acc \n");
+		printf("Cannot detect acc at 0x%x\n", LSM303_ADDRESS_ACCEL);
 		return;
 	}
+	printf("Start Capture IMU !\n");
 	while(thread_alive){
 		read_status = 0 ;
 		read_status |= L3GD20_read(&(time_acc_gyro[4]));
@@ -180,13 +195,19 @@ void acq_imu_thread_func(void * lpParam){
 			clock_gettime(CLOCK_MONOTONIC, &tcur);
 			compute_time =  ((double)tcur.tv_sec + 1.0e-9*tcur.tv_nsec);
 			time_acc_gyro[0] = (float) compute_time;
-			for(i = 0 ; i < 7 ; i ++ )
-			printf("%f, ", time_acc_gyro[i]);
-			printf(" \n");
+			for(i = 0 ; i < 7 ; i ++ ){
+				int string_size ;				
+				if(i < 6){
+					string_size = sprintf(line_buffer, "%f, ", time_acc_gyro[i]);
+				}else{
+					string_size = sprintf(line_buffer, "%f \n");
+				}
+				fwrite(buffer, 1, string_size, imuFile);
+			}
 			//add save to file
 		}
         }
-        
+        fclose(imuFile);
 }
 
 int main(int argc, char *argv[]){
@@ -207,9 +228,7 @@ int main(int argc, char *argv[]){
 	config->bitrate=0;	// zero: leave as default
 	config->framerate=30;
 	config->monochrome=1;
-
-	my_frame_buffer.buffer = malloc(640*480*nb_frames);
-	if(my_frame_buffer.buffer == NULL){
+	if(init_frame_buffer(&my_frame_buffer,nb_frames, 640*480+sizeof(float)) < 0){
 		printf("Cannot allocate %d bytes \n", 640*480*nb_frames);
 		exit(-1);
 	}
