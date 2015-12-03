@@ -2,12 +2,13 @@ OBJS = objs
 
 CFLAGS += -I/usr/local/include/opencv -I/usr/local/include -I../dependencies/motor_hat_clib
 LDFLAGS += -L/usr/local/lib -lopencv_highgui -lopencv_core -lopencv_legacy -lopencv_video -lopencv_features2d -lopencv_calib3d -lopencv_imgproc -lpthread -lm
-CFLAGS += -O3 #-mfpu=neon
+CFLAGS += -O3 -mfpu=neon
 LDFLAGS += -lraspicamcv -lm -lrt
 
 OBJS = \
 	capture_sequence.o \
 	L3GD20.o \
+	LSM303_U.o \
 	i2c_wrapper.o
 
 all: capture_sequence
@@ -15,7 +16,7 @@ all: capture_sequence
 %o: %c
 	gcc -c $(CFLAGS) $< -o $@
 
-capture_sequence : capture_sequence.o
+capture_sequence : $(OBJS)
 	gcc $(LDFLAGS) -o $@ $(OBJS)
 
 clean:

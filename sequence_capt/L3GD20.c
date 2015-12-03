@@ -43,7 +43,7 @@ int L3GD20_begin(int fd, unsigned char rng, unsigned char addr)
 
   /* Make sure we have the correct chip ID since this checks
      for correct address and that the IC is properly connected */
-  uint8_t id = read8(L3GD20_REGISTER_WHO_AM_I);
+  uint8_t id = L3GD20_read8(L3GD20_REGISTER_WHO_AM_I);
   //Serial.println(id, HEX);
   if ((id != L3GD20_ID) && (id != L3GD20H_ID))
   {
@@ -62,7 +62,7 @@ int L3GD20_begin(int fd, unsigned char rng, unsigned char addr)
      0  XEN       X-axis enable (0 = disabled, 1 = enabled)           1 */
 
   /* Switch to normal mode and enable all three channels */
-  write8(L3GD20_REGISTER_CTRL_REG1, 0x0F);
+  L3GD20_write8(L3GD20_REGISTER_CTRL_REG1, 0x0F);
   /* ------------------------------------------------------------------ */
 
   /* Set CTRL_REG2 (0x21)
@@ -71,7 +71,7 @@ int L3GD20_begin(int fd, unsigned char rng, unsigned char addr)
    ---  ------    --------------------------------------------- -------
    5-4  HPM1/0    High-pass filter mode selection                    00
    3-0  HPCF3..0  High-pass filter cutoff frequency selection      0000 */
-
+  L3GD20_write8(L3GD20_REGISTER_CTRL_REG2, 0x02);
   /* Nothing to do ... keep default values */
   /* ------------------------------------------------------------------ */
 
@@ -108,13 +108,13 @@ int L3GD20_begin(int fd, unsigned char rng, unsigned char addr)
   switch(l3gd20_range)
   {
     case L3DS20_RANGE_250DPS:
-      write8(L3GD20_REGISTER_CTRL_REG4, 0x00);
+      L3GD20_write8(L3GD20_REGISTER_CTRL_REG4, 0x00);
       break;
     case L3DS20_RANGE_500DPS:
-      write8(L3GD20_REGISTER_CTRL_REG4, 0x10);
+      L3GD20_write8(L3GD20_REGISTER_CTRL_REG4, 0x10);
       break;
     case L3DS20_RANGE_2000DPS:
-      write8(L3GD20_REGISTER_CTRL_REG4, 0x20);
+      L3GD20_write8(L3GD20_REGISTER_CTRL_REG4, 0x20);
       break;
   }
   /* ------------------------------------------------------------------ */
@@ -128,7 +128,7 @@ int L3GD20_begin(int fd, unsigned char rng, unsigned char addr)
      4  HPen      High-pass filter enable (0=disable,1=enable)        0
    3-2  INT1_SEL  INT1 Selection config                              00
    1-0  OUT_SEL   Out selection config                               00 */
-
+   L3GD20_write8(L3GD20_REGISTER_CTRL_REG5, 0x10);
   /* Nothing to do ... keep default values */
   /* ------------------------------------------------------------------ */
 
@@ -143,7 +143,7 @@ int L3GD20_read(float * xyz)
    unsigned char buffer [6];
    unsigned char status ;
    short raw_x, raw_y, raw_z ;
-   i2c_read_8(l3gd20_periph, L3GD20_REGISTER_STATUS_REG, &status); // reading status data 
+   i2c_read8(l3gd20_periph, L3GD20_REGISTER_STATUS_REG, &status); // reading status data 
    if((status & XYZ_AVAILABLE_FLAG) == 0){ 
 	return 0 ;	
    }

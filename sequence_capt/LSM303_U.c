@@ -18,7 +18,7 @@ int LSM303_Acc_read(float * acc_data)
 	unsigned char buffer [6];
 	unsigned char status ;
 	short raw_x, raw_y, raw_z ;
-	i2c_read_8(lsm303_periph, LSM303_REGISTER_ACCEL_STATUS_REG_A, &status); // reading status data 
+	i2c_read8(lsm303_periph, LSM303_REGISTER_ACCEL_STATUS_REG_A, &status); // reading status data 
 	if((status & XYZ_AVAILABLE_FLAG) == 0){
 		return 0 ;	
 	}

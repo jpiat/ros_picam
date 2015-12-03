@@ -164,16 +164,25 @@ void acq_imu_thread_func(void * lpParam){
 	float compute_time_f ;
 	i2c_fd = open("/dev/i2c-1", O_RDWR);
 	printf("Start Capture IMU !\n");
-	L3GD20_begin(i2c_fd, 0, L3GD20_ADDRESS);
-	LSM303_begin(i2c_fd, LSM303_ADDRESS_ACCEL);
+	if(L3GD20_begin(i2c_fd, 0, L3GD20_ADDRESS)== 0){
+		printf("cannot detect gyro \n");
+		return ;
+	}
+	if(LSM303_Acc_begin(i2c_fd, LSM303_ADDRESS_ACCEL) == 0){
+		printf("Cannot detect acc \n");
+		return;
+	}
 	while(thread_alive){
 		read_status = 0 ;
 		read_status |= L3GD20_read(&(time_acc_gyro[4]));
 		read_status |= LSM303_Acc_read(&(time_acc_gyro[1]));
 		if(read_status){
 			clock_gettime(CLOCK_MONOTONIC, &tcur);
-			compute_time =  ((double)tcur.tv_sec + 1.0e-9*tcur.tv_nsec));
-			time_acc_gyro[0] = (float) compute_time; 
+			compute_time =  ((double)tcur.tv_sec + 1.0e-9*tcur.tv_nsec);
+			time_acc_gyro[0] = (float) compute_time;
+			for(i = 0 ; i < 7 ; i ++ )
+			printf("%f, ", time_acc_gyro[i]);
+			printf(" \n");
 			//add save to file
 		}
         }
@@ -199,13 +208,13 @@ int main(int argc, char *argv[]){
 	config->framerate=30;
 	config->monochrome=1;
 
-	frames_buffer = malloc(640*480*nb_frames);
-	if(frames_buffer == NULL){
+	my_frame_buffer.buffer = malloc(640*480*nb_frames);
+	if(my_frame_buffer.buffer == NULL){
 		printf("Cannot allocate %d bytes \n", 640*480*nb_frames);
 		exit(-1);
 	}
 
-	dummy_image = cvCreateImage(cvSize(640, 480), IPL_DEPTH_8U, 1);
+	//dummy_image = cvCreateImage(cvSize(640, 480), IPL_DEPTH_8U, 1);
 
 	properties->hflip = 1 ;
 	properties->vflip = 1 ;
@@ -239,12 +248,17 @@ int main(int argc, char *argv[]){
 		}
 	}
 	thread_alive = 1 ;
-	acq_image_thread_id = pthread_create(&acq_image_thread, NULL, &acq_image_thread_func, NULL);
+	if(nb_frames > 0){
+		acq_image_thread_id = pthread_create(&acq_image_thread, NULL, &acq_image_thread_func, NULL);
+		save_thread_id = pthread_create(&save_thread, NULL, &save_thread_func, NULL);
+	}
 	acq_imu_thread_id = pthread_create(&acq_imu_thread, NULL, &acq_imu_thread_func, NULL);
-	save_thread_id = pthread_create(&save_thread, NULL, &save_thread_func, NULL);
-	pthread_join(acq_thread, NULL );
-	thread_alive = 0 ;
-	pthread_join(save_thread, NULL );
+	if(nb_frames > 0){
+		pthread_join(acq_image_thread, NULL );
+		thread_alive = 0 ;
+		pthread_join(save_thread, NULL );
+	}
+	pthread_join(acq_imu_thread, NULL );
 	free_frame_buffer(&my_frame_buffer);
 	return 0;
 }

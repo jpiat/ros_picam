@@ -17,8 +17,8 @@
 /*
     I2C ADDRESS/BITS
     -----------------------------------------------------------------------*/
-    #define LSM303_ADDRESS_ACCEL          (0x32 >> 1)         // 0011001x
-    #define LSM303_ADDRESS_MAG            (0x3C >> 1)         // 0011110x
+    #define LSM303_ADDRESS_ACCEL          (0x1D)         // 0011001x
+    #define LSM303_ADDRESS_MAG            (0x77)         // 0011110x
 
 
 /*
