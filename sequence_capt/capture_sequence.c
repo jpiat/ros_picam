@@ -15,6 +15,8 @@
 #include <time.h>
 #include "RaspiCamCV.h"
 #include <pthread.h>
+#include "L3GD20.h"
+#include "LSM303_U.h"
 
 typedef int DWORD;
 typedef pthread_t HANDLE;
@@ -126,7 +128,7 @@ void save_thread_func(void * lpParam){
 	printf("End Save \n");
 }
 
-void acq_thread_func(void * lpParam){
+void acq_image_thread_func(void * lpParam){
 	int i = 0 ;
     	struct timespec tstart={0,0}, tend={0,0};
 	double compute_time = 0.0 ;
@@ -151,9 +153,36 @@ void acq_thread_func(void * lpParam){
         raspiCamCvReleaseCapture(&capture);
 }
 
+
+void acq_imu_thread_func(void * lpParam){
+	int i = 0 ;
+	int i2c_fd ;
+	int read_status = 0 ;
+	float time_acc_gyro [7] ;
+    	struct timespec tcur={0,0};
+	double compute_time = 0.0 ;
+	float compute_time_f ;
+	i2c_fd = open("/dev/i2c-1", O_RDWR);
+	printf("Start Capture IMU !\n");
+	L3GD20_begin(i2c_fd, 0, L3GD20_ADDRESS);
+	LSM303_begin(i2c_fd, LSM303_ADDRESS_ACCEL);
+	while(thread_alive){
+		read_status = 0 ;
+		read_status |= L3GD20_read(&(time_acc_gyro[4]));
+		read_status |= LSM303_Acc_read(&(time_acc_gyro[1]));
+		if(read_status){
+			clock_gettime(CLOCK_MONOTONIC, &tcur);
+			compute_time =  ((double)tcur.tv_sec + 1.0e-9*tcur.tv_nsec));
+			time_acc_gyro[0] = (float) compute_time; 
+			//add save to file
+		}
+        }
+        
+}
+
 int main(int argc, char *argv[]){
-	HANDLE acq_thread, save_thread;
-	DWORD acq_thread_id, save_thread_id;
+	HANDLE acq_image_thread, save_thread, acq_imu_thread;
+	DWORD acq_image_thread_id, save_thread_id, acq_imu_thread_id;
 	int frame_index = 0 ;
 	if(argc > 1) nb_frames = atoi(argv[1]);
 	if(argc > 2){
@@ -161,15 +190,6 @@ int main(int argc, char *argv[]){
 	}else{
        		sprintf(path_base, "./");
 	}
-	struct motor mot3 ;
-        struct motor mot4 ;
-        motor_init(&mot3, 3);
-        motor_init(&mot4, 4);
-
-        motor_run(RELEASE, &mot3);
-        motor_run(RELEASE, &mot4);
-	motor_set_speed(0, &mot3);
-	motor_set_speed(0, &mot4);
 
 	RASPIVID_CONFIG * config = (RASPIVID_CONFIG*)malloc(sizeof(RASPIVID_CONFIG));
 	RASPIVID_PROPERTIES * properties = (RASPIVID_PROPERTIES*)malloc(sizeof(RASPIVID_PROPERTIES));
@@ -199,7 +219,6 @@ int main(int argc, char *argv[]){
 	int i = 0, j = 0 ;
 	int init = 0 ;
 
-	int motor_speed = 0 ;
 	/*
 	Could also use hard coded defaults method: raspiCamCvCreateCameraCapture(0)
 	*/
@@ -220,7 +239,8 @@ int main(int argc, char *argv[]){
 		}
 	}
 	thread_alive = 1 ;
-	acq_thread_id = pthread_create(&acq_thread, NULL, &acq_thread_func, NULL);
+	acq_image_thread_id = pthread_create(&acq_image_thread, NULL, &acq_image_thread_func, NULL);
+	acq_imu_thread_id = pthread_create(&acq_imu_thread, NULL, &acq_imu_thread_func, NULL);
 	save_thread_id = pthread_create(&save_thread, NULL, &save_thread_func, NULL);
 	pthread_join(acq_thread, NULL );
 	thread_alive = 0 ;
