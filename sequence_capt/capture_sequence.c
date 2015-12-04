@@ -49,7 +49,7 @@ RaspiCamCvCapture * capture ;
 
 int push_frame(IplImage * frame, float timestamp, struct frame_buffer * pBuf){
 	if(pBuf->nb_frames_availables >= pBuf->max_frames) return -1 ;
-	memcpy(&(pBuf->buffer[pBuf->write_index]), frame->imageData, sizeof(float)); //pushing timestamp
+	memcpy(&(pBuf->buffer[pBuf->write_index]), &timestamp, sizeof(float)); //pushing timestamp
 	memcpy(&(pBuf->buffer[pBuf->write_index+sizeof(float)]), frame->imageData, (pBuf->frame_size - sizeof(float)));//pushing image
 	pBuf->write_index +=  pBuf->frame_size ;
 	if(pBuf->write_index >= (pBuf->max_frames * pBuf->frame_size)){
@@ -111,7 +111,7 @@ void writePGM(const char *filename, IplImage * img, char *  comment)
 void save_thread_func(void * lpParam){
 	char line_buffer[128];
  	IplImage * dummy_image ;
-	File * tsFile  ;
+	FILE * tsFile  ;
 	int i = 0 ;
 	float timestamp ;
 	sprintf(line_buffer, "%s/images.time", path_base);
@@ -126,7 +126,7 @@ void save_thread_func(void * lpParam){
 		if(my_frame_buffer.nb_frames_availables > 0){
 			if(pop_frame(dummy_image, &timestamp, &my_frame_buffer) >= 0){
 				//printf("One frame \n");
-				string_size = sprintf(line_buffer, "%f\n", timestamp);//printing timestamp to file
+				int string_size = sprintf(line_buffer, "%f\n", timestamp);//printing timestamp to file
 				fwrite(line_buffer, 1, string_size, tsFile);
 				sprintf(path, path_fmt, path_base, i);
                                 writePGM(path, dummy_image, "");
@@ -138,7 +138,7 @@ void save_thread_func(void * lpParam){
 		}
 		usleep(WRITE_DELAY_US);
 	}
-	close(tsFile);
+	fclose(tsFile);
 	printf("End Save \n");
 }
 
@@ -147,6 +147,16 @@ void acq_image_thread_func(void * lpParam){
     	struct timespec tstart={0,0}, tend={0,0}, tcurr;
 	double compute_time = 0.0 ;
 	float compute_time_f ;
+	printf("Wait stable sensor \n");
+        for(i = 0 ; i < 30 ; ){
+                int success = 0 ;
+                success = raspiCamCvGrab(capture);
+                if(success){
+                                IplImage* image = raspiCamCvRetrieve(capture);
+                                i ++ ;
+                }
+        }
+	i = 0 ;
 	printf("Start Capture !\n");
 	clock_gettime(CLOCK_MONOTONIC, &tstart);
 	while(i < nb_frames){
@@ -203,15 +213,17 @@ void acq_imu_thread_func(void * lpParam){
 		read_status |= L3GD20_read(&(time_acc_gyro[4]));
 		read_status |= LSM303_Acc_read(&(time_acc_gyro[1]));
 		if(read_status){
+			int string_size ;
 			clock_gettime(CLOCK_MONOTONIC, &tcur);
 			compute_time =  ((double)tcur.tv_sec + 1.0e-9*tcur.tv_nsec);
 			time_acc_gyro[0] = (float) compute_time;
+			string_size = sprintf(line_buffer, "[7]\n(");
+			fwrite(line_buffer, 1, string_size, imuFile);
 			for(i = 0 ; i < 7 ; i ++ ){
-				int string_size ;				
 				if(i < 6){
-					string_size = sprintf(line_buffer, "%f, ", time_acc_gyro[i]);
+					string_size = sprintf(line_buffer, "%.9g,", time_acc_gyro[i]);
 				}else{
-					string_size = sprintf(line_buffer, "%f \n");
+					string_size = sprintf(line_buffer, "%.9g)\n", time_acc_gyro[i]);
 				}
 				fwrite(line_buffer, 1, string_size, imuFile);
 			}
@@ -239,7 +251,7 @@ int main(int argc, char *argv[]){
 	config->bitrate=0;	// zero: leave as default
 	config->framerate=30;
 	config->monochrome=1;
-	if(init_frame_buffer(&my_frame_buffer,nb_frames, 640*480+sizeof(float)) < 0){
+	if(init_frame_buffer(&my_frame_buffer,nb_frames, (640*480)+sizeof(float)) < 0){
 		printf("Cannot allocate %d bytes \n", 640*480*nb_frames);
 		exit(-1);
 	}
@@ -267,16 +279,6 @@ int main(int argc, char *argv[]){
 	capture = (RaspiCamCvCapture *) raspiCamCvCreateCameraCapture3(0, config, properties, 1); 
 
 	free(config);
-
-	printf("Wait stable sensor \n");
-	for(i = 0 ; i < 10 ; ){
-		int success = 0 ;
-                success = raspiCamCvGrab(capture);
-                if(success){
-                                IplImage* image = raspiCamCvRetrieve(capture);
-                		i ++ ;
-		}
-	}
 	thread_alive = 1 ;
 	if(nb_frames > 0){
 		acq_image_thread_id = pthread_create(&acq_image_thread, NULL, &acq_image_thread_func, NULL);
