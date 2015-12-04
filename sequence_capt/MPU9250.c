@@ -10,8 +10,10 @@ int MPU9250_begin(int fd, char addr){
 	MPU9250_periph.fd = fd ;
 
 	i2c_read8(MPU9250_periph, MPUREG_WHOAMI, &dummy);
-	printf("Sensor is is %x \n", dummy);
-
+	if(dummy != 0x71){
+		printf("Sensor ID (%x) doe snot match MPU9250 \n", dummy);
+		return -1 ;
+	}
 	i2c_write8(MPU9250_periph, MPUREG_PWR_MGMT_1, 0x80);
 	usleep(1000);
 	// Initialize MPU9250 device
