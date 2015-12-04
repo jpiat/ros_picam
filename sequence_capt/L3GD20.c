@@ -49,6 +49,9 @@ int L3GD20_begin(int fd, unsigned char rng, unsigned char addr)
   {
     return 0;
   }
+  if(id == L3GD20_ID) printf("Gyro is L3GD20\n");
+  if(id == L3GD20H_ID) printf("Gyro is L3GD20H\n");
+
 
   /* Set CTRL_REG1 (0x20)
    ====================================================================
@@ -71,7 +74,7 @@ int L3GD20_begin(int fd, unsigned char rng, unsigned char addr)
    ---  ------    --------------------------------------------- -------
    5-4  HPM1/0    High-pass filter mode selection                    00
    3-0  HPCF3..0  High-pass filter cutoff frequency selection      0000 */
-  L3GD20_write8(L3GD20_REGISTER_CTRL_REG2, 0x02);
+ // L3GD20_write8(L3GD20_REGISTER_CTRL_REG2, 0x02);
   /* Nothing to do ... keep default values */
   /* ------------------------------------------------------------------ */
 
@@ -128,7 +131,7 @@ int L3GD20_begin(int fd, unsigned char rng, unsigned char addr)
      4  HPen      High-pass filter enable (0=disable,1=enable)        0
    3-2  INT1_SEL  INT1 Selection config                              00
    1-0  OUT_SEL   Out selection config                               00 */
-   L3GD20_write8(L3GD20_REGISTER_CTRL_REG5, 0x10);
+   //L3GD20_write8(L3GD20_REGISTER_CTRL_REG5, 0x10);
   /* Nothing to do ... keep default values */
   /* ------------------------------------------------------------------ */
 
@@ -179,3 +182,6 @@ int L3GD20_read(float * xyz)
 }
 
 
+void L3GD20_calib(){
+
+}

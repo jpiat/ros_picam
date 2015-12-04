@@ -50,6 +50,6 @@
 
 int L3GD20_begin(int fd, unsigned char rng, unsigned char addr);
 int L3GD20_read(float * xyz);
-
+void L3GD20_calib();
 #endif
 

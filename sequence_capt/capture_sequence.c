@@ -15,9 +15,9 @@
 #include <time.h>
 #include "RaspiCamCV.h"
 #include <pthread.h>
-#include "L3GD20.h"
-#include "LSM303_U.h"
-
+//#include "L3GD20.h"
+//#include "LSM303_U.h"
+#include "MPU9250.h"
 typedef int DWORD;
 typedef pthread_t HANDLE;
 
@@ -198,7 +198,7 @@ void acq_imu_thread_func(void * lpParam){
 	if (imuFile == NULL) {
 		perror("cannot open file to write");
 		return ;
-	}
+	}/*
 	if(L3GD20_begin(i2c_fd, 0, L3GD20_ADDRESS)== 0){
 		printf("cannot detect gyro at 0x%x\n", L3GD20_ADDRESS);
 		return ;
@@ -206,13 +206,20 @@ void acq_imu_thread_func(void * lpParam){
 	if(LSM303_Acc_begin(i2c_fd, LSM303_ADDRESS_ACCEL) == 0){
 		printf("Cannot detect acc at 0x%x\n", LSM303_ADDRESS_ACCEL);
 		return;
-	}
+	}*/
+	if(MPU9250_begin(i2c_fd, MPU9250_ADDREss) == 0){
+                printf("Cannot detect IMU at 0x%x\n", MPU9250_ADDRESS);
+                return;
+        }
 	printf("Start Capture IMU !\n");
 	while(thread_alive){
 		gyro_read_status = 0 ;
 		acc_read_status = 0 ;
-		gyro_read_status = L3GD20_read(&(time_acc_gyro[4]));
+		/*gyro_read_status = L3GD20_read(&(time_acc_gyro[4]));
 		acc_read_status = LSM303_Acc_read(&(time_acc_gyro[1]));
+		*/
+		gyro_read_status = MPU9250_read(&(time_acc_gyro[1]));
+		acc_read_status = gyro_read_status;
 		if(acc_read_status || gyro_read_status){
 			int string_size ;
 			clock_gettime(CLOCK_MONOTONIC, &tcur);
