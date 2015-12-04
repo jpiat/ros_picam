@@ -190,6 +190,8 @@
 #define MPU9250A_8G       ((float)0.000244140625f) // 0.000244140625 g/LSB
 #define MPU9250A_16G      ((float)0.000488281250f) // 0.000488281250 g/LSB
 
+#define G_CONST		((float) 9.80665f)
+
 #define MPU9250G_250DPS   ((float)0.007633587786f) // 0.007633587786 dps/LSB
 #define MPU9250G_500DPS   ((float)0.015267175572f) // 0.015267175572 dps/LSB
 #define MPU9250G_1000DPS  ((float)0.030487804878f) // 0.030487804878 dps/LSB
@@ -200,5 +202,8 @@
 #define MPU9250T_85DEGC   ((float)0.002995177763f) // 0.002995177763 degC/LSB
 
 #define MAG_SCALE_FACTOR ((float)0.15f)
+
+int MPU9250_begin(int fd, char addr);
+int MPU9250_read(float * xyz_rpy);
 
 #endif

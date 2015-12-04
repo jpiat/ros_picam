@@ -9,6 +9,7 @@ OBJS = \
 	capture_sequence.o \
 	L3GD20.o \
 	LSM303_U.o \
+	MPU9250.o \
 	i2c_wrapper.o
 
 all: capture_sequence

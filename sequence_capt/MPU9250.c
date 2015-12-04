@@ -4,20 +4,22 @@
 struct i2c_peripheral_struct MPU9250_periph;
 
 
-int MPU9250_begin(char addr, int fd){
-	unsigned char dummy ;	
+int MPU9250_begin(int fd, char addr){
+	unsigned char dummy ;
 	MPU9250_periph.addr = addr ;
 	MPU9250_periph.fd = fd ;
+
+	i2c_read8(MPU9250_periph, MPUREG_WHOAMI, &dummy);
+	printf("Sensor is is %x \n", dummy);
 
 	i2c_write8(MPU9250_periph, MPUREG_PWR_MGMT_1, 0x80);
 	usleep(1000);
 	// Initialize MPU9250 device
 	// wake up device
-	i2c_write8(MPU9250_periph, MPUREG_PWR_MGMT_1, 0x00); // Clear sleep mode bit (6), enable all sensors 
-	usleep(100000L); // Delay 100 ms for PLL to get established on x-axis gyro; should check for PLL ready interrupt  
-
 	// get stable time source
-	i2c_write8(MPU9250_periph, MPUREG_PWR_MGMT_1, 0x01);  // Set clock source to be PLL with x-axis gyroscope reference, bits 2:0 = 001
+        i2c_write8(MPU9250_periph, MPUREG_PWR_MGMT_1, 0x01);  // Set clock source to be PLL with x-axis gyro
+	usleep(100000L);
+	i2c_write8(MPU9250_periph, MPUREG_PWR_MGMT_2, 0x00); // Clear sleep mode bit (6), enable all sensors 
 
 	// Configure Gyro and Accelerometer
 	// Disable FSYNC and set accelerometer and gyro bandwidth to 44 and 42 Hz, respectively; 
@@ -60,25 +62,28 @@ int MPU9250_begin(char addr, int fd){
 
 int MPU9250_read(float * xyz_rpy){
 	char raw_buffer[12];
+	short short_val[6];
 	char status ;
 	i2c_read8(MPU9250_periph, MPUREG_INT_STATUS, &status);
-	if(status & 0x01) {
+	//printf("Status is %x \n", status);
+	if((status & 0x01) != 0) {
+		//printf("data available \n");
 		i2c_read_buffer(MPU9250_periph, MPUREG_ACCEL_XOUT_H, &raw_buffer[0], 6);
 		i2c_read_buffer(MPU9250_periph, MPUREG_GYRO_XOUT_H, &raw_buffer[6], 6);
-		xyz_rpy[0] = (float)(((short)raw_buffer[0] << 8) | raw_buffer[1]) ;
-		xyz_rpy[1] = (float)(((short)raw_buffer[2] << 8) | raw_buffer[3]) ;
-		xyz_rpy[2] = (float)(((short)raw_buffer[4] << 8) | raw_buffer[5]) ;
-		xyz_rpy[3] = (float)(((short)raw_buffer[6] << 8) | raw_buffer[7]) ;
-		xyz_rpy[4] = (float)(((short)raw_buffer[8] << 8) | raw_buffer[9]) ;
-		xyz_rpy[5] = (float)(((short)raw_buffer[10] << 8) | raw_buffer[11]) ;
-	
-		xyz_rpy[0] *= MPU9250A_4G;
-		xyz_rpy[1] *= MPU9250A_4G;
-		xyz_rpy[2] *= MPU9250A_4G;
+		short_val[0] = (((short)raw_buffer[0] << 8) | (short) raw_buffer[1]) ;
+		short_val[1] = (((short)raw_buffer[2] << 8) | (short) raw_buffer[3]) ;
+		short_val[2] = (((short)raw_buffer[4] << 8) | (short) raw_buffer[5]) ;
+		short_val[3] = (((short)raw_buffer[6] << 8) | (short) raw_buffer[7]) ;
+		short_val[4] = (((short)raw_buffer[8] << 8) | (short) raw_buffer[9]) ;
+		short_val[5] = (((short)raw_buffer[10] << 8) | (short) raw_buffer[11]) ;
 
-		xyz_rpy[3] *= MPU9250G_500DPS;
-		xyz_rpy[4] *= MPU9250G_500DPS;
-		xyz_rpy[5] *= MPU9250G_500DPS;
+		xyz_rpy[0] = MPU9250A_4G * ((float) short_val[0]) * G_CONST ;
+		xyz_rpy[1] = MPU9250A_4G * ((float) short_val[1]) * G_CONST;
+		xyz_rpy[2] = MPU9250A_4G  * ((float) short_val[2]) * G_CONST;
+
+		xyz_rpy[3] = MPU9250G_500DPS  * ((float) short_val[3]) ;
+		xyz_rpy[4] = MPU9250G_500DPS  * ((float) short_val[4]) ;
+		xyz_rpy[5] = MPU9250G_500DPS  * ((float) short_val[5]) ;
 
 		return 1 ;
 	}

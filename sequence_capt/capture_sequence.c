@@ -147,6 +147,26 @@ void acq_image_thread_func(void * lpParam){
     	struct timespec tstart={0,0}, tend={0,0}, tcurr;
 	double compute_time = 0.0 ;
 	float compute_time_f ;
+	
+
+	RASPIVID_CONFIG * config = (RASPIVID_CONFIG*)malloc(sizeof(RASPIVID_CONFIG));
+        RASPIVID_PROPERTIES * properties = (RASPIVID_PROPERTIES*)malloc(sizeof(RASPIVID_PROPERTIES));
+        config->width=640;
+        config->height=480;
+        config->bitrate=0;      // zero: leave as default
+        config->framerate=30;
+        config->monochrome=1;
+	properties->hflip = 1 ;
+        properties->vflip = 1 ;
+        properties -> sharpness = 0 ;
+        properties -> contrast = 0 ;
+        properties -> brightness = 45 ;
+        properties -> saturation = 0 ;
+        properties -> exposure = SPORTS;
+        properties -> shutter_speed = 0 ; // 0 is autoo
+	printf("Init sensor \n");
+        capture = (RaspiCamCvCapture *) raspiCamCvCreateCameraCapture3(0, config, properties, 1);
+	free(config);
 	printf("Wait stable sensor \n");
         for(i = 0 ; i < 30 ; ){
                 int success = 0 ;
@@ -207,7 +227,7 @@ void acq_imu_thread_func(void * lpParam){
 		printf("Cannot detect acc at 0x%x\n", LSM303_ADDRESS_ACCEL);
 		return;
 	}*/
-	if(MPU9250_begin(i2c_fd, MPU9250_ADDREss) == 0){
+	if(MPU9250_begin(i2c_fd, MPU9250_ADDRESS) == 0){
                 printf("Cannot detect IMU at 0x%x\n", MPU9250_ADDRESS);
                 return;
         }
@@ -262,13 +282,6 @@ int main(int argc, char *argv[]){
        		sprintf(path_base, "./");
 	}
 
-	RASPIVID_CONFIG * config = (RASPIVID_CONFIG*)malloc(sizeof(RASPIVID_CONFIG));
-	RASPIVID_PROPERTIES * properties = (RASPIVID_PROPERTIES*)malloc(sizeof(RASPIVID_PROPERTIES));
-	config->width=640;
-	config->height=480;
-	config->bitrate=0;	// zero: leave as default
-	config->framerate=30;
-	config->monochrome=1;
 	if(init_frame_buffer(&my_frame_buffer,nb_frames, (640*480)+sizeof(float)) < 0){
 		printf("Cannot allocate %d bytes \n", 640*480*nb_frames);
 		exit(-1);
@@ -276,27 +289,9 @@ int main(int argc, char *argv[]){
 
 	//dummy_image = cvCreateImage(cvSize(640, 480), IPL_DEPTH_8U, 1);
 
-	properties->hflip = 1 ;
-	properties->vflip = 1 ;
-	properties -> sharpness = 0 ;
-	properties -> contrast = 0 ;
-	properties -> brightness = 45 ;
-	properties -> saturation = 0 ;
-	properties -> exposure = SPORTS;
-	properties -> shutter_speed = 0 ; // 0 is autoo
 	int opt;
 	int i = 0, j = 0 ;
 	int init = 0 ;
-
-	/*
-	Could also use hard coded defaults method: raspiCamCvCreateCameraCapture(0)
-	*/
-	//RaspiCamCvCapture * capture = (RaspiCamCvCapture *) raspiCamCvCreateCameraCapture2(0, config); 
-	
-	printf("Init sensor \n");
-	capture = (RaspiCamCvCapture *) raspiCamCvCreateCameraCapture3(0, config, properties, 1); 
-
-	free(config);
 	thread_alive = 1 ;
 	if(nb_frames > 0){
 		acq_image_thread_id = pthread_create(&acq_image_thread, NULL, &acq_image_thread_func, NULL);
