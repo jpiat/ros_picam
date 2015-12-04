@@ -187,7 +187,7 @@ void acq_imu_thread_func(void * lpParam){
 	FILE *imuFile;
 	int i = 0 ;
 	int i2c_fd ;
-	int read_status = 0 ;
+	int gyro_read_status = 0 , acc_read_status = 0;
 	float time_acc_gyro [7] ;
 	struct timespec tcur={0,0};
 	double compute_time = 0.0 ;
@@ -209,24 +209,35 @@ void acq_imu_thread_func(void * lpParam){
 	}
 	printf("Start Capture IMU !\n");
 	while(thread_alive){
-		read_status = 0 ;
-		read_status |= L3GD20_read(&(time_acc_gyro[4]));
-		read_status |= LSM303_Acc_read(&(time_acc_gyro[1]));
-		if(read_status){
+		gyro_read_status = 0 ;
+		acc_read_status = 0 ;
+		gyro_read_status = L3GD20_read(&(time_acc_gyro[4]));
+		acc_read_status = LSM303_Acc_read(&(time_acc_gyro[1]));
+		if(acc_read_status || gyro_read_status){
 			int string_size ;
 			clock_gettime(CLOCK_MONOTONIC, &tcur);
 			compute_time =  ((double)tcur.tv_sec + 1.0e-9*tcur.tv_nsec);
 			time_acc_gyro[0] = (float) compute_time;
-			string_size = sprintf(line_buffer, "[7]\n(");
-			fwrite(line_buffer, 1, string_size, imuFile);
-			for(i = 0 ; i < 7 ; i ++ ){
-				if(i < 6){
+			string_size = sprintf(line_buffer, "[7]\n(%.9g,", time_acc_gyro[0]);
+			fwrite(line_buffer, 1, string_size, imuFile); //array size and timestamp
+			for(i = 1 ; i < 4 ; i ++ ){
+				if(acc_read_status){
 					string_size = sprintf(line_buffer, "%.9g,", time_acc_gyro[i]);
 				}else{
-					string_size = sprintf(line_buffer, "%.9g)\n", time_acc_gyro[i]);
-				}
+                                        string_size = sprintf(line_buffer, "x,");
+                                }
 				fwrite(line_buffer, 1, string_size, imuFile);
 			}
+			for(i = 4 ; i < 7 ; i ++ ){
+				int last_comma = (i == 6)?1:0;//not writing last comma
+                                if(gyro_read_status){
+                                        string_size = sprintf(line_buffer, "%.9g,", time_acc_gyro[i]);
+                                }else{
+					string_size = sprintf(line_buffer, "x,");
+				}   
+                                fwrite(line_buffer, 1, string_size - last_comma, imuFile);
+                        }
+			 fwrite(")\n", 1, 2, imuFile);
 			//add save to file
 		}
         }
