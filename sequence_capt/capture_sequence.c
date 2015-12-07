@@ -22,8 +22,11 @@ typedef int DWORD;
 typedef pthread_t HANDLE;
 
 
+#define SEPARATE_TIMESTAMP
+
 char path [128];
 char * path_fmt = "%s/image_%04d.pgm";
+char * path_fmt_long = "%s/%010lu.pgm";
 char path_base [128];
 int p[] = {CV_IMWRITE_JPEG_QUALITY, 100, 0};
 
@@ -153,24 +156,30 @@ void writePGM(const char *filename, IplImage * img, char *  comment)
 void save_thread_func(void * lpParam){
 	char line_buffer[128];
  	IplImage * dummy_image ;
-	FILE * tsFile  ;
 	int i = 0 ;
 	unsigned long timestamp ;
+	#ifdef SEPARATE_TIMESTAMP
+	FILE * tsFile  ;
 	sprintf(line_buffer, "%s/images.time", path_base);
 	tsFile = fopen(line_buffer, "w");
 	if (tsFile == NULL) {
 		perror("cannot open file to write");
 		return ;
 	}
+	#endif
 	dummy_image = cvCreateImage(cvSize(640, 480), IPL_DEPTH_8U, 1);
 	printf("Start Save ! \n");
 	while(thread_alive || my_frame_buffer.nb_frames_availables > 0){
 		if(my_frame_buffer.nb_frames_availables > 0){
 			if(pop_frame(dummy_image, &timestamp, &my_frame_buffer) >= 0){
 				//printf("One frame \n");
+				#ifdef SEPARATE_TIMESTAMP
 				int string_size = sprintf(line_buffer, "%ld\n", timestamp);//printing timestamp to file
 				fwrite(line_buffer, 1, string_size, tsFile);
 				sprintf(path, path_fmt, path_base, i);
+				#else
+				sprintf(path, path_fmt_long, path_base, timestamp)
+				#endif
                                 writePGM(path, dummy_image, "");
                                 //printf("Saving %s \n", path);
 				//usleep(5000);
