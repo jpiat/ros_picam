@@ -27,6 +27,7 @@ char * path_fmt = "%s/image_%04d.pgm";
 char path_base [128];
 int p[] = {CV_IMWRITE_JPEG_QUALITY, 100, 0};
 
+struct timespec tstart ; // timestamp of time origin for the programm
 
 #define MAX_SEQ_LENGTH 300
 #define BUFFER_LENGTH 800
@@ -47,10 +48,51 @@ int thread_alive = 0 ;
 unsigned int nb_frames ;
 RaspiCamCvCapture * capture ;
 
-int push_frame(IplImage * frame, float timestamp, struct frame_buffer * pBuf){
+
+int timeval_subtract (struct timespec  * result, struct timespec *x, struct timespec *y)
+{
+  /* Perform the carry for the later subtraction by updating y. */
+  if (x->tv_nsec < y->tv_nsec) {
+    long nsec = (y->tv_nsec - x->tv_nsec) * 1000000000L;
+    y->tv_nsec -= nsec * 1000000000L;
+    y->tv_sec += nsec;
+  }
+  if (x->tv_nsec - y->tv_nsec > 1000000000L) {
+    long nsec = (x->tv_nsec - y->tv_nsec) / 1000000000L;
+    y->tv_nsec += 1000000000L * nsec;
+    y->tv_sec -= nsec;
+  }
+
+  /* Compute the time remaining to wait.
+     tv_usec is certainly positive. */
+  result->tv_sec = x->tv_sec - y->tv_sec;
+  result->tv_nsec = x->tv_nsec - y->tv_nsec;
+
+  /* Return 1 if result is negative. */
+  return x->tv_sec < y->tv_sec;
+}
+
+void init_time(){
+	clock_gettime(CLOCK_MONOTONIC, &tstart);
+}
+
+unsigned long get_long_time(){
+	struct timespec tcurr, telapsed ;
+	unsigned long diff_time ;
+	clock_gettime(CLOCK_MONOTONIC, &tcurr);
+	if(timeval_subtract(&telapsed, &tcurr, &tstart) == 1){
+		telapsed.tv_sec = -telapsed.tv_sec;
+		telapsed.tv_nsec = -telapsed.tv_nsec;
+	}
+	diff_time = telapsed.tv_sec * 1000000L + telapsed.tv_nsec/1000L ;
+	return diff_time ;
+}
+
+
+int push_frame(IplImage * frame, unsigned long timestamp, struct frame_buffer * pBuf){
 	if(pBuf->nb_frames_availables >= pBuf->max_frames) return -1 ;
-	memcpy(&(pBuf->buffer[pBuf->write_index]), &timestamp, sizeof(float)); //pushing timestamp
-	memcpy(&(pBuf->buffer[pBuf->write_index+sizeof(float)]), frame->imageData, (pBuf->frame_size - sizeof(float)));//pushing image
+	memcpy(&(pBuf->buffer[pBuf->write_index]), &timestamp, sizeof(unsigned long)); //pushing timestamp
+	memcpy(&(pBuf->buffer[pBuf->write_index+sizeof(unsigned long)]), frame->imageData, (pBuf->frame_size - sizeof(unsigned long)));//pushing image
 	pBuf->write_index +=  pBuf->frame_size ;
 	if(pBuf->write_index >= (pBuf->max_frames * pBuf->frame_size)){
 		pBuf->write_index = 0 ;
@@ -59,10 +101,10 @@ int push_frame(IplImage * frame, float timestamp, struct frame_buffer * pBuf){
 	return 0 ;
 }
 
-int pop_frame(IplImage * frame, float * timestamp, struct frame_buffer * pBuf){
+int pop_frame(IplImage * frame, unsigned long * timestamp, struct frame_buffer * pBuf){
 	if(pBuf->nb_frames_availables <= 0) return -1 ;
-	memcpy(timestamp, &(pBuf->buffer[pBuf->read_index]), sizeof(float));
-	memcpy(frame->imageData, &(pBuf->buffer[pBuf->read_index+sizeof(float)]), (pBuf->frame_size - sizeof(float)));
+	memcpy(timestamp, &(pBuf->buffer[pBuf->read_index]), sizeof(unsigned long));
+	memcpy(frame->imageData, &(pBuf->buffer[pBuf->read_index+sizeof(unsigned long)]), (pBuf->frame_size - sizeof(unsigned long)));
 	pBuf->read_index +=  pBuf->frame_size ;
 	if(pBuf->read_index >= (pBuf->max_frames * pBuf->frame_size)){
 		pBuf->read_index = 0 ;
@@ -113,7 +155,7 @@ void save_thread_func(void * lpParam){
  	IplImage * dummy_image ;
 	FILE * tsFile  ;
 	int i = 0 ;
-	float timestamp ;
+	unsigned long timestamp ;
 	sprintf(line_buffer, "%s/images.time", path_base);
 	tsFile = fopen(line_buffer, "w");
 	if (tsFile == NULL) {
@@ -126,7 +168,7 @@ void save_thread_func(void * lpParam){
 		if(my_frame_buffer.nb_frames_availables > 0){
 			if(pop_frame(dummy_image, &timestamp, &my_frame_buffer) >= 0){
 				//printf("One frame \n");
-				int string_size = sprintf(line_buffer, "%f\n", timestamp);//printing timestamp to file
+				int string_size = sprintf(line_buffer, "%ld\n", timestamp);//printing timestamp to file
 				fwrite(line_buffer, 1, string_size, tsFile);
 				sprintf(path, path_fmt, path_base, i);
                                 writePGM(path, dummy_image, "");
@@ -144,10 +186,8 @@ void save_thread_func(void * lpParam){
 
 void acq_image_thread_func(void * lpParam){
 	int i = 0 ;
-    	struct timespec tstart={0,0}, tend={0,0}, tcurr;
-	double compute_time = 0.0 ;
-	float compute_time_f ;
-	
+    	unsigned long t_start, t_stop ;
+	unsigned long t_diff ;
 
 	RASPIVID_CONFIG * config = (RASPIVID_CONFIG*)malloc(sizeof(RASPIVID_CONFIG));
         RASPIVID_PROPERTIES * properties = (RASPIVID_PROPERTIES*)malloc(sizeof(RASPIVID_PROPERTIES));
@@ -178,37 +218,59 @@ void acq_image_thread_func(void * lpParam){
         }
 	i = 0 ;
 	printf("Start Capture !\n");
-	clock_gettime(CLOCK_MONOTONIC, &tstart);
+	t_start = get_long_time();
 	while(i < nb_frames){
                 int success = 0 ;
                 success = raspiCamCvGrab(capture);
                 if(success){
                                 IplImage* image = raspiCamCvRetrieve(capture);
-				clock_gettime(CLOCK_MONOTONIC, &tcurr);
-				compute_time =  ((double)tcurr.tv_sec + 1.0e-9*tcurr.tv_nsec);
-				compute_time_f = (float) compute_time ;
-                                if(push_frame(image,compute_time_f, &my_frame_buffer) < 0) printf("lost frame %d ! \n", i);;
+				t_diff = get_long_time();
+                                if(push_frame(image,t_diff, &my_frame_buffer) < 0) printf("lost frame %d ! \n", i);;
                                 i ++ ;
 				usleep(1000);
                 }
         }
-        clock_gettime(CLOCK_MONOTONIC, &tend);
+        t_stop = get_long_time();
         printf("Capture done \n");
-        compute_time =  ((double)tend.tv_sec + 1.0e-9*tend.tv_nsec) - 
-           ((double)tstart.tv_sec + 1.0e-9*tstart.tv_nsec);
-        printf("Capture took %.5f seconds\n", compute_time);
-        printf("Actual frame-rate was %f \n", nb_frames/compute_time);
+        t_diff =  t_stop - t_start ;;
+        printf("Capture took %lu ms\n", t_diff/1000L);
+        //printf("Actual frame-rate was %f \n", nb_frames/t_diff);
         raspiCamCvReleaseCapture(&capture);
 }
 
+
+void export_imu_raw(FILE * fd, short * data, unsigned long time){
+	char buffer [128];
+	int size ;
+	int i ;
+	size = sprintf(buffer, "%lu ", time);
+        fwrite(buffer, 1, size, fd); //array size and timestamp
+        for(i = 0 ; i < 6 ; i ++ ){
+               size = sprintf(buffer, "%hd ", data[i]);
+               fwrite(buffer, 1, size, fd);
+         }
+         fwrite("\n", 1, 1, fd);
+}
+
+
+void export_imu_calib(FILE * fd, float acc_range, float gyro_range){
+        char buffer [128];
+        int size ;
+        size = sprintf(buffer, "%% Accelerometer Range = +/- %f \n", acc_range );
+        fwrite(buffer, 1, size, fd);
+        size = sprintf(buffer, "%% Gyroscope Range = +/- %f \n", gyro_range );
+        fwrite(buffer, 1, size, fd);
+        size = sprintf(buffer, "%% TimeStamp AccX AccY AccZ GyroX GyroY GyroZ\n");
+        fwrite(buffer, 1, size, fd);
+}
 
 void acq_imu_thread_func(void * lpParam){
 	char line_buffer[128] ;
 	FILE *imuFile;
 	int i = 0 ;
 	int i2c_fd ;
-	int gyro_read_status = 0 , acc_read_status = 0;
-	float time_acc_gyro [7] ;
+	int imu_read_status = 0 ;
+	short raw_imu [6];
 	struct timespec tcur={0,0};
 	double compute_time = 0.0 ;
 	float compute_time_f ;
@@ -218,54 +280,21 @@ void acq_imu_thread_func(void * lpParam){
 	if (imuFile == NULL) {
 		perror("cannot open file to write");
 		return ;
-	}/*
-	if(L3GD20_begin(i2c_fd, 0, L3GD20_ADDRESS)== 0){
-		printf("cannot detect gyro at 0x%x\n", L3GD20_ADDRESS);
-		return ;
 	}
-	if(LSM303_Acc_begin(i2c_fd, LSM303_ADDRESS_ACCEL) == 0){
-		printf("Cannot detect acc at 0x%x\n", LSM303_ADDRESS_ACCEL);
-		return;
-	}*/
+
+	export_imu_calib(imuFile, 4.0, 500.0); // AG and 500dps
 	if(MPU9250_begin(i2c_fd, MPU9250_ADDRESS) == 0){
                 printf("Cannot detect IMU at 0x%x\n", MPU9250_ADDRESS);
                 return;
         }
 	printf("Start Capture IMU !\n");
 	while(thread_alive){
-		gyro_read_status = 0 ;
-		acc_read_status = 0 ;
-		/*gyro_read_status = L3GD20_read(&(time_acc_gyro[4]));
-		acc_read_status = LSM303_Acc_read(&(time_acc_gyro[1]));
-		*/
-		gyro_read_status = MPU9250_read(&(time_acc_gyro[1]));
-		acc_read_status = gyro_read_status;
-		if(acc_read_status || gyro_read_status){
+		imu_read_status = MPU9250_read_raw(raw_imu);
+		if(imu_read_status){
 			int string_size ;
-			clock_gettime(CLOCK_MONOTONIC, &tcur);
-			compute_time =  ((double)tcur.tv_sec + 1.0e-9*tcur.tv_nsec);
-			time_acc_gyro[0] = (float) compute_time;
-			string_size = sprintf(line_buffer, "[7]\n(%.9g,", time_acc_gyro[0]);
-			fwrite(line_buffer, 1, string_size, imuFile); //array size and timestamp
-			for(i = 1 ; i < 4 ; i ++ ){
-				if(acc_read_status){
-					string_size = sprintf(line_buffer, "%.9g,", time_acc_gyro[i]);
-				}else{
-                                        string_size = sprintf(line_buffer, "x,");
-                                }
-				fwrite(line_buffer, 1, string_size, imuFile);
-			}
-			for(i = 4 ; i < 7 ; i ++ ){
-				int last_comma = (i == 6)?1:0;//not writing last comma
-                                if(gyro_read_status){
-                                        string_size = sprintf(line_buffer, "%.9g,", time_acc_gyro[i]);
-                                }else{
-					string_size = sprintf(line_buffer, "x,");
-				}   
-                                fwrite(line_buffer, 1, string_size - last_comma, imuFile);
-                        }
-			 fwrite(")\n", 1, 2, imuFile);
-			//add save to file
+			unsigned long timestamp ;
+			timestamp = get_long_time();
+			export_imu_raw(imuFile, raw_imu, timestamp);
 		}
         }
         fclose(imuFile);
@@ -293,6 +322,7 @@ int main(int argc, char *argv[]){
 	int i = 0, j = 0 ;
 	int init = 0 ;
 	thread_alive = 1 ;
+	init_time();
 	if(nb_frames > 0){
 		acq_image_thread_id = pthread_create(&acq_image_thread, NULL, &acq_image_thread_func, NULL);
 		save_thread_id = pthread_create(&save_thread, NULL, &save_thread_func, NULL);

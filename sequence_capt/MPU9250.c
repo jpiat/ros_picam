@@ -91,3 +91,24 @@ int MPU9250_read(float * xyz_rpy){
 	}
 	return 0 ;
 }
+
+int MPU9250_read_raw(short * xyz_rpy){
+        char raw_buffer[12];
+        char status ;
+        i2c_read8(MPU9250_periph, MPUREG_INT_STATUS, &status);
+        //printf("Status is %x \n", status);
+        if((status & 0x01) != 0) {
+                //printf("data available \n");
+                i2c_read_buffer(MPU9250_periph, MPUREG_ACCEL_XOUT_H, &raw_buffer[0], 6);
+                i2c_read_buffer(MPU9250_periph, MPUREG_GYRO_XOUT_H, &raw_buffer[6], 6);
+                xyz_rpy[0] = (((short)raw_buffer[0] << 8) | (short) raw_buffer[1]) ;
+                xyz_rpy[1] = (((short)raw_buffer[2] << 8) | (short) raw_buffer[3]) ;
+                xyz_rpy[2] = (((short)raw_buffer[4] << 8) | (short) raw_buffer[5]) ;
+               	xyz_rpy[3] = (((short)raw_buffer[6] << 8) | (short) raw_buffer[7]) ;
+                xyz_rpy[4] = (((short)raw_buffer[8] << 8) | (short) raw_buffer[9]) ;
+                xyz_rpy[5] = (((short)raw_buffer[10] << 8) | (short) raw_buffer[11]) ;
+                return 1 ;
+        }
+        return 0 ;
+}
+

@@ -205,5 +205,5 @@
 
 int MPU9250_begin(int fd, char addr);
 int MPU9250_read(float * xyz_rpy);
-
+int MPU9250_read_raw(short * xyz_rpy);
 #endif
