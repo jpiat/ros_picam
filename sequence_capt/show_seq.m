@@ -26,18 +26,20 @@ for file = files'
     end
     image = imread(file.name);
     imshow(image);
-    subplot(3, 1, 2);
+    handle_acc_plot = subplot(3, 1, 2);
     hold all
     for i=1:3
         plot(IMU(start_index:end_index, 1), acc(start_index:end_index,i),'color',cc(i,:));
     end
-    subplot(3, 1, 3)
+    handle_gyro_plot = subplot(3, 1, 3)
     hold all
     for i=1:3
         plot(IMU(start_index:end_index, 1),gyro(start_index:end_index,i) ,'color',cc(i+4,:));
     end
     start_index = end_index;
     pause ;
+    delete(handle_acc_plot);
+    delete(handle_gyro_plot);
     %csv = load(file.name)
     % Do some stuff
 end
