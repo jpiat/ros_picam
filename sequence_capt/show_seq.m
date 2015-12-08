@@ -19,16 +19,23 @@ end_index = 1;
 for file = files'
     [pathstr,name,ext] = fileparts(file.name) ;
     image_time = str2double(name);
-    subplot(2, 1, 1);
+    img_plot = subplot(3, 1, 1);
     end_index = start_index ;
     while IMU(end_index, 1) < image_time
         end_index  = end_index + 1 ;
     end
-    axis equal
     image = imread(file.name);
     imshow(image);
-    subplot(2, 1, 2);
-    plot(IMU(start_index:end_index, 1),gyro(start_index:end_index,1) ,'color',cc(1,:));
+    subplot(3, 1, 2);
+    hold all
+    for i=1:3
+        plot(IMU(start_index:end_index, 1), acc(start_index:end_index,i),'color',cc(i,:));
+    end
+    subplot(3, 1, 3)
+    hold all
+    for i=1:3
+        plot(IMU(start_index:end_index, 1),gyro(start_index:end_index,i) ,'color',cc(i+4,:));
+    end
     start_index = end_index;
     pause ;
     %csv = load(file.name)

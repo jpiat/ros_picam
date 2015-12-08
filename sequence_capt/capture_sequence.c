@@ -186,9 +186,9 @@ void writePGM(const char *filename, IplImage * img, char *  comment)
     }
     fprintf(pgmFile, "P5 \n");
     //TODO : insert data as comments ... Maybe use Json file format
-    if(comment != NULL){
+   /* if(comment != NULL){
     	fprintf(pgmFile, "#%s \n", comment);
-    }
+    }*/
     fprintf(pgmFile, "%d %d \n%d \n", img->width, img->height, 255);
     fwrite(img->imageData, 1, img->height*img->width, pgmFile);
     //fflush(pgmFile);
@@ -312,6 +312,8 @@ void export_imu_calib(FILE * fd, float acc_range, float gyro_range){
         size = sprintf(buffer, "%% Accelerometer Range = +/- %f \n", acc_range );
         fwrite(buffer, 1, size, fd);
         size = sprintf(buffer, "%% Gyroscope Range = +/- %f \n", gyro_range );
+        fwrite(buffer, 1, size, fd);
+	size = sprintf(buffer, "%% All IMU samples are 16-bit signed values \n", gyro_range );
         fwrite(buffer, 1, size, fd);
         size = sprintf(buffer, "%% TimeStamp AccX AccY AccZ GyroX GyroY GyroZ\n");
         fwrite(buffer, 1, size, fd);
