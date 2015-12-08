@@ -30,7 +30,7 @@ int MPU9250_begin(int fd, char addr){
 	i2c_write8(MPU9250_periph, MPUREG_CONFIG, 0x03);  
 
 	// Set sample rate = gyroscope output rate/(1 + SMPLRT_DIV)
-	i2c_write8(MPU9250_periph, MPUREG_SMPLRT_DIV, 0x04);  // Use a 200 Hz rate; the same rate set in CONFIG above
+	i2c_write8(MPU9250_periph, MPUREG_SMPLRT_DIV, 0x03);  // Use a 200 Hz rate; the same rate set in CONFIG above
 
 	// Set gyroscope full scale range
 	// Range selects FS_SEL and AFS_SEL are 0 - 3, so 2-bit values are left-shifted into positions 4:3

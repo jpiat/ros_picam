@@ -22,7 +22,7 @@ typedef int DWORD;
 typedef pthread_t HANDLE;
 
 
-#define SEPARATE_TIMESTAMP
+//#define SEPARATE_TIMESTAMP
 
 char path [128];
 char * path_fmt = "%s/image_%04d.pgm";
@@ -30,7 +30,7 @@ char * path_fmt_long = "%s/%010lu.pgm";
 char path_base [128];
 int p[] = {CV_IMWRITE_JPEG_QUALITY, 100, 0};
 
-struct timespec tstart ; // timestamp of time origin for the programm
+struct timeval tstart ; // timestamp of time origin for the programm
 
 #define MAX_SEQ_LENGTH 300
 #define BUFFER_LENGTH 800
@@ -52,11 +52,11 @@ unsigned int nb_frames ;
 RaspiCamCvCapture * capture ;
 
 
-int timeval_subtract (struct timespec  * result, struct timespec *x, struct timespec *y)
+int timespec_subtract (struct timespec  * result, struct timespec *x, struct timespec *y)
 {
   /* Perform the carry for the later subtraction by updating y. */
   if (x->tv_nsec < y->tv_nsec) {
-    long nsec = (y->tv_nsec - x->tv_nsec) * 1000000000L;
+    long nsec = (y->tv_nsec - x->tv_nsec) / 1000000000L + 1;
     y->tv_nsec -= nsec * 1000000000L;
     y->tv_sec += nsec;
   }
@@ -75,19 +75,61 @@ int timeval_subtract (struct timespec  * result, struct timespec *x, struct time
   return x->tv_sec < y->tv_sec;
 }
 
+int timeval_subtract (struct timeval  * result, struct timeval *x, struct timeval *y)
+{
+  /* Perform the carry for the later subtraction by updating y. */
+  if (x->tv_usec < y->tv_usec) {
+    long nsec = ((y->tv_usec - x->tv_usec)/1000000L)  + 1;
+    y->tv_usec -= (nsec * 1000000L);
+    y->tv_sec += nsec;
+  }
+  if (x->tv_usec - y->tv_usec > 1000000L) {
+    long nsec = (x->tv_usec - y->tv_usec) / 1000000L;
+    y->tv_usec += (1000000L * nsec);
+    y->tv_sec -= nsec;
+  }
+
+  /* Compute the time remaining to wait.
+     tv_usec is certainly positive. */
+  result->tv_sec = x->tv_sec - y->tv_sec;
+  result->tv_usec = x->tv_usec - y->tv_usec;
+
+  /* Return 1 if result is negative. */
+  return x->tv_sec < y->tv_sec;
+}
+
+
 void init_time(){
-	clock_gettime(CLOCK_MONOTONIC, &tstart);
+	//clock_gettime(CLOCK_MONOTONIC, &tstart);
+	gettimeofday(&tstart, NULL);
 }
 
 unsigned long get_long_time(){
-	struct timespec tcurr, telapsed ;
+
+	/*µ
+	struct timespec tcurr, telapsed, start_copy ;
 	unsigned long diff_time ;
+	start_copy = tstart ;
 	clock_gettime(CLOCK_MONOTONIC, &tcurr);
-	if(timeval_subtract(&telapsed, &tcurr, &tstart) == 1){
+	if(timeval_subtract(&telapsed, &tcurr, &start_copy) == 1){
 		telapsed.tv_sec = -telapsed.tv_sec;
 		telapsed.tv_nsec = -telapsed.tv_nsec;
+		printf("negative value \n");
 	}
 	diff_time = telapsed.tv_sec * 1000000L + telapsed.tv_nsec/1000L ;
+	return diff_time ;
+*/
+	struct timeval tcurr, telapsed, start_copy;
+	unsigned long diff_time;
+	start_copy = tstart ;
+	gettimeofday(&tcurr, NULL);
+	if(timeval_subtract(&telapsed, &tcurr, &start_copy) == 1){
+                telapsed.tv_sec = -telapsed.tv_sec;
+                telapsed.tv_usec = -telapsed.tv_usec;
+                //printf("negative value \n");
+        }
+	diff_time = telapsed.tv_sec * 1000000L + telapsed.tv_usec ;
+	//printf("time %lu \n", diff_time);
 	return diff_time ;
 }
 
@@ -178,7 +220,7 @@ void save_thread_func(void * lpParam){
 				fwrite(line_buffer, 1, string_size, tsFile);
 				sprintf(path, path_fmt, path_base, i);
 				#else
-				sprintf(path, path_fmt_long, path_base, timestamp)
+				sprintf(path, path_fmt_long, path_base, timestamp);
 				#endif
                                 writePGM(path, dummy_image, "");
                                 //printf("Saving %s \n", path);
@@ -189,7 +231,9 @@ void save_thread_func(void * lpParam){
 		}
 		usleep(WRITE_DELAY_US);
 	}
+	#ifdef SEPARATE_TIMESTAMP
 	fclose(tsFile);
+	#endif
 	printf("End Save \n");
 }
 
