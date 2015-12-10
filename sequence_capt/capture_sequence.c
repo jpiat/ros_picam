@@ -15,6 +15,8 @@
 #include <time.h>
 #include "RaspiCamCV.h"
 #include <pthread.h>
+#include <signal.h>
+#include <sys/resource.h>
 //#include "L3GD20.h"
 //#include "LSM303_U.h"
 #include "MPU9250.h"
@@ -51,6 +53,10 @@ int thread_alive = 0 ;
 unsigned int nb_frames ;
 RaspiCamCvCapture * capture ;
 
+unsigned int max_imu_data ;
+unsigned int nb_imu_data ;
+char * imu_buffer ;
+#define IMU_LINE_BYTES (sizeof(short)*6 + sizeof(unsigned long))
 
 int timespec_subtract (struct timespec  * result, struct timespec *x, struct timespec *y)
 {
@@ -105,20 +111,6 @@ void init_time(){
 }
 
 unsigned long get_long_time(){
-
-	/*µ
-	struct timespec tcurr, telapsed, start_copy ;
-	unsigned long diff_time ;
-	start_copy = tstart ;
-	clock_gettime(CLOCK_MONOTONIC, &tcurr);
-	if(timeval_subtract(&telapsed, &tcurr, &start_copy) == 1){
-		telapsed.tv_sec = -telapsed.tv_sec;
-		telapsed.tv_nsec = -telapsed.tv_nsec;
-		printf("negative value \n");
-	}
-	diff_time = telapsed.tv_sec * 1000000L + telapsed.tv_nsec/1000L ;
-	return diff_time ;
-*/
 	struct timeval tcurr, telapsed, start_copy;
 	unsigned long diff_time;
 	start_copy = tstart ;
@@ -261,7 +253,7 @@ void acq_image_thread_func(void * lpParam){
         capture = (RaspiCamCvCapture *) raspiCamCvCreateCameraCapture3(0, config, properties, 1);
 	free(config);
 	printf("Wait stable sensor \n");
-        for(i = 0 ; i < 30 ; ){
+        for(i = 0 ; (i < 30 && thread_alive) ; ){
                 int success = 0 ;
                 success = raspiCamCvGrab(capture);
                 if(success){
@@ -297,10 +289,10 @@ void export_imu_raw(FILE * fd, short * data, unsigned long time){
 	int size ;
 	int i ;
 	size = sprintf(buffer, "%lu ", time);
-        fwrite(buffer, 1, size, fd); //array size and timestamp
+        if(fwrite(buffer, 1, size, fd) < size) printf("write failed ... \n");; //array size and timestamp
         for(i = 0 ; i < 6 ; i ++ ){
                size = sprintf(buffer, "%hd ", data[i]);
-               fwrite(buffer, 1, size, fd);
+               if(fwrite(buffer, 1, size, fd) < size) printf("write failed ... \n");
          }
          fwrite("\n", 1, 1, fd);
 }
@@ -320,8 +312,8 @@ void export_imu_calib(FILE * fd, float acc_range, float gyro_range){
 }
 
 void acq_imu_thread_func(void * lpParam){
-	char line_buffer[128] ;
-	FILE *imuFile;
+	/*char line_buffer[128] ;
+	FILE *imuFile;*/
 	int i = 0 ;
 	int i2c_fd ;
 	int imu_read_status = 0 ;
@@ -330,35 +322,49 @@ void acq_imu_thread_func(void * lpParam){
 	double compute_time = 0.0 ;
 	float compute_time_f ;
 	i2c_fd = open("/dev/i2c-1", O_RDWR);
-	sprintf(line_buffer, "%s/IMU.log", path_base);
+	/*sprintf(line_buffer, "%s/IMU.log", path_base);
 	imuFile = fopen(line_buffer, "w");
 	if (imuFile == NULL) {
 		perror("cannot open file to write");
 		return ;
-	}
+	}*/
 
-	export_imu_calib(imuFile, 4.0, 500.0); // AG and 500dps
+	//export_imu_calib(imuFile, 4.0, 500.0); // AG and 500dps
 	if(MPU9250_begin(i2c_fd, MPU9250_ADDRESS) == 0){
                 printf("Cannot detect IMU at 0x%x\n", MPU9250_ADDRESS);
                 return;
         }
 	printf("Start Capture IMU !\n");
-	while(thread_alive){
+	while(thread_alive && nb_imu_data < max_imu_data){
 		imu_read_status = MPU9250_read_raw(raw_imu);
 		if(imu_read_status){
 			int string_size ;
 			unsigned long timestamp ;
 			timestamp = get_long_time();
-			export_imu_raw(imuFile, raw_imu, timestamp);
+			memcpy(&(imu_buffer[nb_imu_data*IMU_LINE_BYTES]), &timestamp, sizeof(unsigned long));
+			memcpy(&(imu_buffer[(nb_imu_data*IMU_LINE_BYTES)+sizeof(unsigned long)]), raw_imu, 6*sizeof(short));
+			nb_imu_data ++ ;
+			//export_imu_raw(imuFile, raw_imu, timestamp);
 		}
         }
-        fclose(imuFile);
+        //fclose(imuFile);
+}
+
+void killHandler(int sig) {
+	printf("Ending Capture\n");
+	thread_alive = 0;
 }
 
 int main(int argc, char *argv[]){
 	HANDLE acq_image_thread, save_thread, acq_imu_thread;
 	DWORD acq_image_thread_id, save_thread_id, acq_imu_thread_id;
+	char line_buffer[128] ;
+        FILE *imuFile;
 	int frame_index = 0 ;
+	if(argc == 1){
+		printf("Usage : capture_sequence <nb_frames> <capture folder> \n");
+		exit(0);
+	}
 	if(argc > 1) nb_frames = atoi(argv[1]);
 	if(argc > 2){
 		sprintf(path_base, "%s", argv[2]);
@@ -370,12 +376,32 @@ int main(int argc, char *argv[]){
 		printf("Cannot allocate %d bytes \n", 640*480*nb_frames);
 		exit(-1);
 	}
-
+	max_imu_data = (nb_frames > 0)?(((nb_frames/30)+1024)*250):((3600)*250);
+	nb_imu_data = 0 ;
+	//buffer for enough imu data at 250Hz
+	imu_buffer = malloc(max_imu_data*IMU_LINE_BYTES);
+	if(imu_buffer == NULL){
+		printf("Cannot allocate buffer for IMU data \n");
+		return 0 ;
+	}
 	//dummy_image = cvCreateImage(cvSize(640, 480), IPL_DEPTH_8U, 1);
-
+	
+	sprintf(line_buffer, "%s/IMU.log", path_base);
+        imuFile = fopen(line_buffer, "w");
+        if (imuFile == NULL) {
+                perror("cannot open IMU file for write \n");
+                return ;
+        }
+        export_imu_calib(imuFile, 4.0, 500.0); // AG and 500dps
+	
 	int opt;
 	int i = 0, j = 0 ;
 	int init = 0 ;
+	
+	signal(SIGINT, killHandler);
+	signal(SIGKILL, killHandler);
+	signal(SIGTERM, killHandler);
+	signal(SIGTSTP, killHandler);
 	thread_alive = 1 ;
 	init_time();
 	if(nb_frames > 0){
@@ -389,6 +415,18 @@ int main(int argc, char *argv[]){
 		pthread_join(save_thread, NULL );
 	}
 	pthread_join(acq_imu_thread, NULL );
+	printf("Saving IMU data to disk %u \n", nb_imu_data);
+	for(i = 0; i < nb_imu_data ; i ++){
+		unsigned long timestamp ;
+		short raw_imu [6];
+		memcpy(&timestamp, &(imu_buffer[i*IMU_LINE_BYTES]), sizeof(unsigned long));
+		memcpy(raw_imu, &(imu_buffer[(i*IMU_LINE_BYTES)+sizeof(unsigned long)]), 6*sizeof(short));
+		export_imu_raw(imuFile, raw_imu, timestamp);
+		usleep(1);
+	}
+	printf("save done \n");
+	fclose(imuFile);
+	free(imu_buffer);
 	free_frame_buffer(&my_frame_buffer);
 	return 0;
 }
