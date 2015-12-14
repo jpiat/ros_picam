@@ -152,6 +152,7 @@ int pop_frame(IplImage * frame, unsigned long * timestamp, struct frame_buffer *
 }
 
 int init_frame_buffer(struct frame_buffer * pBuf, unsigned int nb_frames, unsigned int frame_size){
+	if(nb_frames > BUFFER_LENGTH) nb_frames = BUFFER_LENGTH ;
 	pBuf -> max_frames = nb_frames ;
 	pBuf -> frame_size = frame_size;
 	pBuf -> buffer = malloc(nb_frames*(pBuf -> frame_size));
