@@ -35,8 +35,8 @@ int p[] = {CV_IMWRITE_JPEG_QUALITY, 100, 0};
 struct timeval tstart ; // timestamp of time origin for the programm
 
 #define MAX_SEQ_LENGTH 300
-#define BUFFER_LENGTH 800
-#define WRITE_DELAY_US 50
+#define BUFFER_LENGTH 1600
+#define WRITE_DELAY_US 1
 
 
 struct frame_buffer{
