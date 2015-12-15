@@ -17,6 +17,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <sys/resource.h>
+#include <lz4.h>
 //#include "L3GD20.h"
 //#include "LSM303_U.h"
 #include "MPU9250.h"
@@ -36,8 +37,9 @@ struct timeval tstart ; // timestamp of time origin for the programm
 
 #define MAX_SEQ_LENGTH 300
 #define BUFFER_LENGTH 800
-#define WRITE_DELAY_US 50
+#define WRITE_DELAY_US 1
 
+#define MESSAGE_MAX_BYTES (640*480)+sizeof(unsigned long)
 
 struct frame_buffer{
 	char * buffer ;
@@ -190,43 +192,43 @@ void writePGM(const char *filename, IplImage * img, char *  comment)
 
 void save_thread_func(void * lpParam){
 	char line_buffer[128];
+	char * cmp_frame_buff ;
  	IplImage * dummy_image ;
 	int i = 0 ;
 	unsigned long timestamp ;
-	#ifdef SEPARATE_TIMESTAMP
-	FILE * tsFile  ;
-	sprintf(line_buffer, "%s/images.time", path_base);
-	tsFile = fopen(line_buffer, "w");
-	if (tsFile == NULL) {
-		perror("cannot open file to write");
-		return ;
-	}
-	#endif
+	FILE *seqFile;
+	cmp_frame_buff = malloc(MESSAGE_MAX_BYTES);
+	if(cmp_frame_buff == NULL) printf("Cannot allocate sequence output file");
+	sprintf(path, "%s/sequence.lz4", path_base);
+    	seqFile = fopen(path, "wb");
+
+	//start LZ4 compression
+	LZ4_stream_t* const lz4Stream = LZ4_createStream();
+    	const size_t cmpBufBytes = LZ4_COMPRESSBOUND(MESSAGE_MAX_BYTES);
+    	char* const cmpBuf = (char*) malloc(cmpBufBytes);
+
 	dummy_image = cvCreateImage(cvSize(640, 480), IPL_DEPTH_8U, 1);
 	printf("Start Save ! \n");
-	while(thread_alive && my_frame_buffer.nb_frames_availables > 0){
+	while(thread_alive || my_frame_buffer.nb_frames_availables > 0){
 		if(my_frame_buffer.nb_frames_availables > 0){
 			if(pop_frame(dummy_image, &timestamp, &my_frame_buffer) >= 0){
-				//printf("One frame \n");
-				#ifdef SEPARATE_TIMESTAMP
-				int string_size = sprintf(line_buffer, "%ld\n", timestamp);//printing timestamp to file
-				fwrite(line_buffer, 1, string_size, tsFile);
-				sprintf(path, path_fmt, path_base, i);
-				#else
-				sprintf(path, path_fmt_long, path_base, timestamp);
-				#endif
-                                writePGM(path, dummy_image, "");
-                                //printf("Saving %s \n", path);
-				//usleep(5000);
-                                //cvSaveImage(path, dummy_image, NULL);
+				memcpy(cmp_frame_buff, &timestamp, sizeof(unsigned long));
+				memcpy((cmp_frame_buff + sizeof(unsigned long)), dummy_image->imageData, 640*480);
+				const int cmpBytes = LZ4_compress_continue(lz4Stream, cmp_frame_buff, cmpBuf, MESSAGE_MAX_BYTES);
+				if (cmpBytes <= 0){
+				 printf("Compression failed \n");
+				 break;
+				}
+				fwrite(cmpBuf, 1, cmpBytes, seqFile);
+				//writePGM(path, dummy_image, "");
                                 i ++ ;
         		}
 		}
 		usleep(WRITE_DELAY_US);
 	}
-	#ifdef SEPARATE_TIMESTAMP
-	fclose(tsFile);
-	#endif
+	free(cmp_frame_buff);
+	LZ4_freeStream(lz4Stream);
+	fclose(seqFile);
 	printf("End Save \n");
 }
 
@@ -254,7 +256,7 @@ void acq_image_thread_func(void * lpParam){
         capture = (RaspiCamCvCapture *) raspiCamCvCreateCameraCapture3(0, config, properties, 1);
 	free(config);
 	printf("Wait stable sensor \n");
-        for(i = 0 ; (i < 30 && thread_alive) ; ){
+        for(i = 0 ; (i < 30) ; ){
                 int success = 0 ;
                 success = raspiCamCvGrab(capture);
                 if(success){
