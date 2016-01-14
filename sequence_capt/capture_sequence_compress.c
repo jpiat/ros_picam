@@ -25,21 +25,16 @@ typedef int DWORD;
 typedef pthread_t HANDLE;
 
 
-//#define SEPARATE_TIMESTAMP
-
 char path [128];
-char * path_fmt = "%s/image_%04d.pgm";
-char * path_fmt_long = "%s/%010lu.pgm";
 char path_base [128];
-int p[] = {CV_IMWRITE_JPEG_QUALITY, 100, 0};
 
 struct timeval tstart ; // timestamp of time origin for the programm
 
-#define MAX_SEQ_LENGTH 300
 #define BUFFER_LENGTH 1600
 #define WRITE_DELAY_US 1
 
-#define MESSAGE_MAX_BYTES (640*480)+sizeof(unsigned long)
+#define IMAGE_BYTES (640*480)+sizeof(unsigned long)
+#define LZ4_MESSAGE_MAX_BYTES IMAGE_BYTES
 
 struct frame_buffer{
 	char * buffer ;
@@ -59,6 +54,11 @@ unsigned int max_imu_data ;
 unsigned int nb_imu_data ;
 char * imu_buffer ;
 #define IMU_LINE_BYTES (sizeof(short)*6 + sizeof(unsigned long))
+
+#define IMU_DATA_FLAG 0x01
+#define IMAGE_DATA_FLAG 0x02
+
+//Frame format in compressed data : 8b Data identifier | 16ub uncompressed data size (minus flags and timestamp) | 32ub Timestamp | ... Data 
 
 int timespec_subtract (struct timespec  * result, struct timespec *x, struct timespec *y)
 {
@@ -169,26 +169,6 @@ void free_frame_buffer(struct frame_buffer * pBuf){
 	free(pBuf -> buffer);
 }
 
-void writePGM(const char *filename, IplImage * img, char *  comment)
-{
-    FILE *pgmFile;
-    int i, j;
-    int hi, lo;
-    pgmFile = fopen(filename, "wb");
-    if (pgmFile == NULL) {
-        perror("cannot open file to write");
-        exit(EXIT_FAILURE);
-    }
-    fprintf(pgmFile, "P5 \n");
-    //TODO : insert data as comments ... Maybe use Json file format
-   /* if(comment != NULL){
-    	fprintf(pgmFile, "#%s \n", comment);
-    }*/
-    fprintf(pgmFile, "%d %d \n%d \n", img->width, img->height, 255);
-    fwrite(img->imageData, 1, img->height*img->width, pgmFile);
-    //fflush(pgmFile);
-    fclose(pgmFile);
-}
 
 void save_thread_func(void * lpParam){
 	char line_buffer[128];
@@ -197,14 +177,14 @@ void save_thread_func(void * lpParam){
 	int i = 0 ;
 	unsigned long timestamp ;
 	FILE *seqFile;
-	cmp_frame_buff = malloc(MESSAGE_MAX_BYTES);
+	cmp_frame_buff = malloc(LZ4_MESSAGE_MAX_BYTES);
 	if(cmp_frame_buff == NULL) printf("Cannot allocate sequence output file");
 	sprintf(path, "%s/sequence.lz4", path_base);
     	seqFile = fopen(path, "wb");
 
 	//start LZ4 compression
 	LZ4_stream_t* const lz4Stream = LZ4_createStream();
-    	const size_t cmpBufBytes = LZ4_COMPRESSBOUND(MESSAGE_MAX_BYTES);
+    	const size_t cmpBufBytes = LZ4_COMPRESSBOUND(LZ4_MESSAGE_MAX_BYTES);
     	char* const cmpBuf = (char*) malloc(cmpBufBytes);
 
 	dummy_image = cvCreateImage(cvSize(640, 480), IPL_DEPTH_8U, 1);
@@ -220,7 +200,6 @@ void save_thread_func(void * lpParam){
 				 break;
 				}
 				fwrite(cmpBuf, 1, cmpBytes, seqFile);
-				//writePGM(path, dummy_image, "");
                                 i ++ ;
         		}
 		}
@@ -375,8 +354,8 @@ int main(int argc, char *argv[]){
        		sprintf(path_base, "./");
 	}
 
-	if(init_frame_buffer(&my_frame_buffer,nb_frames, (640*480)+sizeof(float)) < 0){
-		printf("Cannot allocate %d bytes \n", 640*480*nb_frames);
+	if(init_frame_buffer(&my_frame_buffer,nb_frames, IMAGE_BYTES) < 0){
+		printf("Cannot allocate %d bytes \n", IMAGE_BYTES*nb_frames);
 		exit(-1);
 	}
 	max_imu_data = (nb_frames > 0)?(((nb_frames/30)+1024)*250):((3600)*250);
@@ -387,8 +366,7 @@ int main(int argc, char *argv[]){
 		printf("Cannot allocate buffer for IMU data \n");
 		return 0 ;
 	}
-	//dummy_image = cvCreateImage(cvSize(640, 480), IPL_DEPTH_8U, 1);
-	
+
 	sprintf(line_buffer, "%s/IMU.log", path_base);
         imuFile = fopen(line_buffer, "w");
         if (imuFile == NULL) {

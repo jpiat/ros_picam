@@ -204,7 +204,7 @@ void save_thread_func(void * lpParam){
 	#endif
 	dummy_image = cvCreateImage(cvSize(640, 480), IPL_DEPTH_8U, 1);
 	printf("Start Save ! \n");
-	while(thread_alive && my_frame_buffer.nb_frames_availables > 0){
+	while(thread_alive){
 		if(my_frame_buffer.nb_frames_availables > 0){
 			if(pop_frame(dummy_image, &timestamp, &my_frame_buffer) >= 0){
 				//printf("One frame \n");
