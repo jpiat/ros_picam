@@ -47,8 +47,28 @@ def GetImuFromLine(line):
 	imu.linear_acceleration_covariance = create_diag_mat(acc_raw_to_ms(1.0), acc_raw_to_ms(1.0), acc_raw_to_ms(1.0))
 	return (ts, ImuStamp, imu)
 
-def GetImageFromFile(im_file):
-	return
+def GetImageFromFile(im_path):
+	fp = open( im_path, "r" )
+	p = ImageFile.Parser()
+	while 1:
+		s = fp.read(307218) # trying to read a full file in one shot ...
+		if not s:
+		    break
+		p.feed(s)
+	im = p.close() # we should now have an image object
+	im_stamp = os.path.basename(im_path).split(".")[0] #image timestamp is directly encoded in file name
+	im_stamp =  float(im_stamp)/1000000.0
+	Stamp = rospy.rostime.Time.from_sec(im_stamp)
+	Img = Image()
+	Img.header.stamp = Stamp
+	Img.width = im.size[0]
+	Img.height = im.size[1]
+	Img.encoding = "mono8"
+	Img.header.frame_id = "camera"
+	Img_data = [pix for pix in im.getdata()]
+	#  Img_data = [pix for pixdata in im.getdata() for pix in pixdata]
+	Img.data = Img_data
+	return (im_stamp, Stamp, Img)
 
 def GetFilesFromDir(dir):
     '''Generates a list of files from the directory'''
@@ -72,18 +92,7 @@ def CreateMonoBag(imgs,imu,bagname):
     try:
         for i in range(len(imgs)):
             print("Adding %s" % imgs[i])
-            fp = open( imgs[i], "r" )
-            p = ImageFile.Parser()
-            while 1:
-                s = fp.read(307218) # trying to read a full file in one shot ...
-                if not s:
-                    break
-                p.feed(s)
-
-            im = p.close() # we should now have an image object
-            im_stamp = os.path.basename(imgs[i]).split(".")[0] #image timestamp is directly encoded in file name
-            im_stamp =  float(im_stamp)/1000000.0
-            
+            (im_stamp, Stamp, Img) = GetImageFromFile(imgs[i])
             while True :
                 (ts, ImuStamp, imu) = GetImuFromLine(line)
 		bag.write('imu', imu, ImuStamp)
@@ -91,16 +100,6 @@ def CreateMonoBag(imgs,imu,bagname):
 			break
 		line = fimu.readline()   
 
-            Stamp = rospy.rostime.Time.from_sec(im_stamp)
-            Img = Image()
-            Img.header.stamp = Stamp
-            Img.width = im.size[0]
-            Img.height = im.size[1]
-            Img.encoding = "mono8"
-            Img.header.frame_id = "camera"
-            Img_data = [pix for pix in im.getdata()]
-            #  Img_data = [pix for pixdata in im.getdata() for pix in pixdata]
-            Img.data = Img_data
             bag.write('camera/image_raw', Img, Stamp)
     finally:
         bag.close()       
