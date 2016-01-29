@@ -10,13 +10,17 @@ from geometry_msgs.msg import Vector3
 import ImageFile
 
 
+G_2_MPSS=9.80665
+ACC_RANGE=4.0
+GYRO_RANGE=500.0
+
 def acc_raw_to_ms(d):
-	g = (4.0/32768.0)*float(d)
-	g = g*9.80665
+	g = (ACC_RANGE/32768.0)*float(d)
+	g = g*G_2_MPSS
 	return g
 
 def gyro_raw_to_rads(d):
-	g = (500.0/32768.0)*float(d) # deg/s
+	g = (GYRO_RANGE/32768.0)*float(d) # deg/s
 	g = g*(math.pi/180.0)
 	return g
 
