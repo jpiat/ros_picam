@@ -21,13 +21,34 @@ def gyro_raw_to_rads(d):
 	return g
 
 def create_vector3(x, y, z):
-    v = Vector3()
-    # I guess the units will be like that, but I don't know
-    v.x = x
-    v.y = y
-    v.z = z
-    return v
+	v = Vector3()
+	# I guess the units will be like that, but I don't know
+	v.x = x
+	v.y = y
+	v.z = z	
+	return v
 
+def create_diag_mat(x, y, z):
+	mat = [0] * 9
+	mat[0] = x
+	mat[4] = y
+	mat[8] = z
+	return mat
+
+
+def GetImuFromLine(line):
+	(ts, ax, ay, az, gx, gy, gz) = [t(s) for t,s in zip((int,int, int, int, int, int, int),line.split())]
+	imu = Imu()
+	ts = float(ts)/1000000.0
+	ImuStamp = rospy.rostime.Time.from_sec(ts)
+	imu.angular_velocity = create_vector3(gyro_raw_to_rads(gx), gyro_raw_to_rads(gy), gyro_raw_to_rads(gz))
+	imu.angular_velocity_covariance = create_diag_mat(gyro_raw_to_rads(1.0), gyro_raw_to_rads(1.0), gyro_raw_to_rads(1.0));
+	imu.linear_acceleration = create_vector3(acc_raw_to_ms(ax), acc_raw_to_ms(ay), acc_raw_to_ms(az))
+	imu.linear_acceleration_covariance = create_diag_mat(acc_raw_to_ms(1.0), acc_raw_to_ms(1.0), acc_raw_to_ms(1.0))
+	return (ts, ImuStamp, imu)
+
+def GetImageFromFile(im_file):
+	return
 
 def GetFilesFromDir(dir):
     '''Generates a list of files from the directory'''
@@ -46,7 +67,7 @@ def CreateMonoBag(imgs,imu,bagname):
     bag =rosbag.Bag(bagname, 'w')
     fimu = open(imu, "r")
     line = "%"
-    while line[0] == '%':
+    while line[0] == '%': #skipping comment lines
 	line = fimu.readline()
     try:
         for i in range(len(imgs)):
@@ -54,22 +75,17 @@ def CreateMonoBag(imgs,imu,bagname):
             fp = open( imgs[i], "r" )
             p = ImageFile.Parser()
             while 1:
-                s = fp.read(1024)
+                s = fp.read(307218) # trying to read a full file in one shot ...
                 if not s:
                     break
                 p.feed(s)
 
-            im = p.close()
-            im_stamp = os.path.basename(imgs[i]).split(".")[0]
+            im = p.close() # we should now have an image object
+            im_stamp = os.path.basename(imgs[i]).split(".")[0] #image timestamp is directly encoded in file name
             im_stamp =  float(im_stamp)/1000000.0
             
             while True :
-                (ts, ax, ay, az, gx, gy, gz) = [t(s) for t,s in zip((int,int, int, int, int, int, int),line.split())]
-	        imu = Imu()
-                ts = float(ts)/1000000.0
-		ImuStamp = rospy.rostime.Time.from_sec(ts)
-		imu.angular_velocity = create_vector3(gyro_raw_to_rads(gx), gyro_raw_to_rads(gy), gyro_raw_to_rads(gz))
-                imu.linear_acceleration = create_vector3(acc_raw_to_ms(ax), acc_raw_to_ms(ay), acc_raw_to_ms(az))
+                (ts, ImuStamp, imu) = GetImuFromLine(line)
 		bag.write('imu', imu, ImuStamp)
 		if ts > im_stamp:
 			break
