@@ -1,7 +1,7 @@
 OBJS = objs
 
 CFLAGS += -I/usr/local/include/opencv -I/usr/local/include -I../dependencies/motor_hat_clib
-LDFLAGS += -L/usr/local/lib -lopencv_highgui -lopencv_core -lopencv_legacy -lopencv_video -lopencv_features2d -lopencv_calib3d -lopencv_imgproc -lpthread -lm
+LDFLAGS += -L/usr/local/lib -lopencv_highgui -lopencv_core -lopencv_video -lopencv_features2d -lopencv_calib3d -lopencv_imgproc -lpthread -lm
 CFLAGS += -O3 -mfpu=neon
 LDFLAGS += -lraspicamcv -lm -lrt -llz4
 
