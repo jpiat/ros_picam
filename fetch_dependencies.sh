@@ -4,7 +4,7 @@ BASE_DIR=`pwd`
 
 sudo apt-get update
 sudo apt-get install gcc g++ libx11-dev libxt-dev libxext-dev libgraphicsmagick1-dev libcv-dev liblz4-dev
-
+sudo apt-get install wiringpi
 #required by OpenCV
 sudo apt-get install libjpeg8-dev libjasper-dev libpng12-dev
 sudo apt-get install libavcodec-dev libavformat-dev libswscale-dev libv4l-dev
