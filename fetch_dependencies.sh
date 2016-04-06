@@ -3,7 +3,7 @@
 BASE_DIR=`pwd`
 
 sudo apt-get update
-sudo apt-get install gcc g++ libx11-dev libxt-dev libxext-dev libgraphicsmagick1-dev libcv-dev liblz4-dev
+sudo apt-get install cmake gcc g++ libx11-dev libxt-dev libxext-dev libgraphicsmagick1-dev libcv-dev liblz4-dev
 sudo apt-get install wiringpi
 #required by OpenCV
 sudo apt-get install libjpeg8-dev libjasper-dev libpng12-dev
@@ -19,7 +19,7 @@ fi
 
 cd dependencies
 
-if([ ! -d opencv ]; then
+if [ ! -d opencv ]; then
 	git clone https://github.com/Itseez/opencv.git
 	cd opencv/
 	git checkout tags/3.0.0
