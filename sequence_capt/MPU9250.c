@@ -31,7 +31,7 @@ int MPU9250_begin(int fd, char addr){
 
 	// Set sample rate = gyroscope output rate/(1 + SMPLRT_DIV)
 	i2c_write8(MPU9250_periph, MPUREG_SMPLRT_DIV, 0x03);  // Use a 200 Hz rate; the same rate set in CONFIG above
-
+	//i2c_write8(MPU9250_periph, MPUREG_SMPLRT_DIV, 0x00); //Setting for 1kHz output
 	// Set gyroscope full scale range
 	// Range selects FS_SEL and AFS_SEL are 0 - 3, so 2-bit values are left-shifted into positions 4:3
 	i2c_read8(MPU9250_periph, MPUREG_GYRO_CONFIG, &dummy);
@@ -44,14 +44,14 @@ int MPU9250_begin(int fd, char addr){
 	i2c_write8(MPU9250_periph, MPUREG_ACCEL_CONFIG, dummy & ~0xE0); // Clear self-test bits [7:5] 
 	i2c_write8(MPU9250_periph, MPUREG_ACCEL_CONFIG, dummy & ~0x18); // Clear AFS bits [4:3]
 	i2c_write8(MPU9250_periph, MPUREG_ACCEL_CONFIG, dummy | 1 << 3); // Set scale to 4G 
-
+	
 	// Set accelerometer sample rate configuration
 	// It is possible to get a 4 kHz sample rate from the accelerometer by choosing 1 for
 	// accel_fchoice_b bit [3]; in this case the bandwidth is 1.13 kHz
 	i2c_read8(MPU9250_periph, MPUREG_ACCEL_CONFIG_2, &dummy);
 	i2c_write8(MPU9250_periph, MPUREG_ACCEL_CONFIG_2, dummy & ~0x0F); // Clear accel_fchoice_b (bit 3) and A_DLPFG (bits [2:0])  
 	i2c_write8(MPU9250_periph, MPUREG_ACCEL_CONFIG_2, dummy | 0x03); // Set accelerometer rate to 1 kHz and bandwidth to 41 Hz
-
+	//i2c_write8(MPU9250_periph, MPUREG_ACCEL_CONFIG_2, dummy | 0x00); //setting for 1kHz output and 460Hz low pass
 	// The accelerometer, gyro, and thermometer are set to 1 kHz sample rates, 
 	// but all these rates are further reduced by a factor of 5 to 200 Hz because of the SMPLRT_DIV setting
 
