@@ -22,7 +22,7 @@ cd dependencies
 if [ ! -d opencv ]; then
 	git clone https://github.com/Itseez/opencv.git
 	cd opencv/
-	git checkout tags/3.0.0
+	git checkout tags/3.1.0
 fi
 
 cd ${BASE_DIR}/dependencies
@@ -58,7 +58,7 @@ cd ${BASE_DIR}/dependencies
 cd ${BASE_DIR}/dependencies
 
 cd opencv/
-git checkout tags/3.0.0
+git checkout tags/3.1.0
 mkdir release
 cd release
 cmake -D CMAKE_BUILD_TYPE=RELEASE -D CMAKE_INSTALL_PREFIX=/usr/local -D ENABLE_NEON=ON ..
