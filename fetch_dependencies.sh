@@ -10,7 +10,7 @@ sudo apt-get install libjpeg8-dev libjasper-dev libpng12-dev
 sudo apt-get install libavcodec-dev libavformat-dev libswscale-dev libv4l-dev
 sudo apt-get install libatlas-base-dev gfortran
 sudo apt-get install libgtk2.0-dev
-sudo apt-get install libdc1394-22-dev libilmbase6 openexr
+sudo apt-get install libdc1394-22-dev libilmbase6 openexr libopenexr-dev
 #end of required by OpenCV
 
 if [ ! -d dependencies ]; then
