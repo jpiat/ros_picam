@@ -3,14 +3,14 @@
 BASE_DIR=`pwd`
 
 sudo apt-get update
-sudo apt-get install cmake gcc g++ libx11-dev libxt-dev libxext-dev libgraphicsmagick1-dev liblz4-dev
-sudo apt-get install wiringpi
+sudo apt-get -y install cmake gcc g++ libx11-dev libxt-dev libxext-dev libgraphicsmagick1-dev liblz4-dev
+sudo apt-get -y  install wiringpi
 #required by OpenCV
-sudo apt-get install libjpeg8-dev libjasper-dev libpng12-dev
-sudo apt-get install libavcodec-dev libavformat-dev libswscale-dev libv4l-dev
-sudo apt-get install libatlas-base-dev gfortran
-sudo apt-get install libgtk2.0-dev
-sudo apt-get install libdc1394-22-dev libilmbase6 openexr libopenexr-dev
+sudo apt-get -y install libjpeg8-dev libjasper-dev libpng12-dev
+sudo apt-get -y install libavcodec-dev libavformat-dev libswscale-dev libv4l-dev
+sudo apt-get -y install libatlas-base-dev gfortran
+sudo apt-get -y install libgtk2.0-dev
+sudo apt-get -y install libdc1394-22-dev libilmbase6 openexr libopenexr-dev
 #end of required by OpenCV
 
 if [ ! -d dependencies ]; then
