@@ -3,7 +3,7 @@ The sequence cpature folder contains everything to capture raw grayscale image a
 
 
 To install, run the fetch dependencies script that will install :
-- OpenCV3.0 from source
+- OpenCV3.1.0 from source
 - RaspiCamCV
 - required packages
 
